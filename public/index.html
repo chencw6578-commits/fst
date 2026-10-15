@@ -136,12 +136,15 @@
       <input id="sKey" type="password" style="width:100%" placeholder="sk-…">
       <label>temperature（0–1.2，越大越多样，默认 0.9）</label>
       <input id="sTemp" type="number" step="0.1" min="0" max="1.2" style="width:120px">
+      <label>网站背景资料（告诉 AI 你的网站是做什么的，生成内容会贴合网站主题，≤2000 字）</label>
+      <textarea id="sProfile" style="width:100%" rows="4" placeholder="例：我的网站 example.com 是一个面向跑步爱好者的装备评测站，主打跑鞋测评、跑步训练计划与装备选购指南，受众是刚开始跑步的新手，内容风格实用、口语化。"></textarea>
+      <div class="muted" style="margin-top:4px">提示：写得越具体（行业、受众、内容类型、风格），AI 写出的外链文章越不像广告、越容易过审。</div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn" onclick="saveSettings()">保存设置</button>
         <button class="btn ghost" onclick="testAI()">测试连接</button>
         <span id="aiTestResult" class="muted"></span>
       </div>
-      <div class="note" style="margin-top:14px">⚠ 隐私提示：启用后，任务的锚文本与目标 URL 会发送给你所配置的 AI 服务商用于生成内容；不启用则所有数据只留在本机。</div>
+      <div class="note" style="margin-top:14px">⚠ 隐私提示：启用后，任务的锚文本、目标 URL 及「网站背景资料 / 背景备注」会发送给你所配置的 AI 服务商用于生成内容；不启用则所有数据只留在本机。</div>
     </div>
   </section>
 
@@ -163,7 +166,7 @@
         <li>脚本激活条件：当前网站域名命中「平台规则」且规则未停用；「通用启发式（兜底）」规则会对所有站点生效，可按需停用。</li>
         <li>填充不准确时，用面板上的「拾取选择器」功能点选目标输入框，把得到的选择器填进对应平台规则里。</li>
         <li>所有数据仅保存在本机 <span class="code" id="dbPath">data/db.json</span>，脚本只与本机管理台通信。</li>
-        <li>想让内容全自动生成：到「设置」页配置 AI（任意 OpenAI 兼容接口），拉取任务时自动出稿；或在任务列表点「AI 生成」+「查看内容」。</li>
+        <li>想让内容全自动生成：到「设置」页配置 AI（任意 OpenAI 兼容接口），拉取任务时自动出稿；或在任务列表点「AI 生成」+「查看内容」。<b>记得在「设置」页填写「网站背景资料」</b>，让 AI 知道你的网站是做什么的，内容才会贴合主题；单条任务还可在创建/编辑时填「背景备注」做更精确的引导。</li>
         <li>自动收录检测依赖 Bing 的可用性，触发反爬时会得到「未确认」，人工复核是正式流程的一部分。</li>
       </ul>
     </div>
@@ -275,11 +278,13 @@ function openTaskModal(id) {
         `<option value="${x.id}" ${t && t.templateId === x.id ? 'selected' : (!t && x.isDefault ? 'selected' : '')}>${esc(x.name)}</option>`).join('')}</select></div>
       <div><label>平台（可留空，发布时自动识别）</label><input id="mPlat" style="width:100%" value="${esc(t && t.platform)}" placeholder="如 Medium / Diigo"></div>
     </div>
+    <label>背景备注（可选，≤500 字，告诉 AI 这条外链的特定背景，如发布平台类型、内容侧重点）</label>
+    <textarea id="mCtx" style="width:100%" rows="2" placeholder="例：这篇要发在健身类博客，重点提新手选购跑鞋时最容易踩的坑">${esc(t && t.context)}</textarea>
     <div id="modalErr"></div>
     <div id="modalActs"><button class="btn gray" onclick="closeModal()">取消</button><button class="btn" onclick="saveTask('${id || ''}')">保存</button></div>`);
 }
 async function saveTask(id) {
-  const body = { targetUrl: $('mUrl').value, anchor: $('mAnchor').value, templateId: $('mTpl').value === 'tpl_default' ? null : $('mTpl').value, platform: $('mPlat').value };
+  const body = { targetUrl: $('mUrl').value, anchor: $('mAnchor').value, templateId: $('mTpl').value === 'tpl_default' ? null : $('mTpl').value, platform: $('mPlat').value, context: $('mCtx').value };
   try {
     if (id) await api('/api/tasks/' + id, { method: 'PUT', body: JSON.stringify(body) });
     else await api('/api/tasks', { method: 'POST', body: JSON.stringify(body) });
@@ -475,12 +480,13 @@ async function loadSettings() {
     $('sBase').value = s.aiBaseUrl || '';
     $('sModel').value = s.aiModel || '';
     $('sTemp').value = s.aiTemperature;
+    $('sProfile').value = s.siteProfile || '';
     $('sKey').placeholder = s.hasKey ? '已保存（留空则不修改）' : 'sk-…';
   } catch (e) { }
 }
 async function saveSettings() {
   try {
-    const body = { aiEnabled: $('sAiEnabled').checked, aiBaseUrl: $('sBase').value, aiModel: $('sModel').value, aiTemperature: $('sTemp').value };
+    const body = { aiEnabled: $('sAiEnabled').checked, aiBaseUrl: $('sBase').value, aiModel: $('sModel').value, aiTemperature: $('sTemp').value, siteProfile: $('sProfile').value };
     const key = $('sKey').value.trim();
     if (key) body.aiApiKey = key;
     const s = await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) });

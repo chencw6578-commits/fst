@@ -105,7 +105,8 @@ function defaultDb() {
       aiBaseUrl: 'https://api.deepseek.com/v1',
       aiApiKey: '',
       aiModel: 'deepseek-chat',
-      aiTemperature: 0.9
+      aiTemperature: 0.9,
+      siteProfile: ''
     }
   };
 }
@@ -115,7 +116,7 @@ function loadDb() {
     const d = defaultDb();
     for (const k of ['tasks', 'templates', 'rules', 'recentVariants']) if (db[k] == null) db[k] = d[k];
     if (!db.settings) db.settings = d.settings;
-    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiTemperature']) if (db.settings[k] == null) db.settings[k] = d.settings[k];
+    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiTemperature', 'siteProfile']) if (db.settings[k] == null) db.settings[k] = d.settings[k];
   } catch (e) { db = defaultDb(); saveDb(); }
 }
 function saveDb() {
@@ -225,6 +226,8 @@ async function aiGenVariant(task) {
   let variant = null, anchorMissing = false;
   for (let attempt = 0; attempt < 2; attempt++) {
     const angle = AI_ANGLES[Math.floor(Math.random() * AI_ANGLES.length)];
+    const profile = (db.settings.siteProfile || '').trim();
+    const ctx = (task.context || '').trim();
     const sys = [
       'You are an SEO content writer. Generate content for a blog post that will be published on a third-party blog.',
       'Respond with ONLY a JSON object: {"title": "...", "body": "..."} — no markdown fences, no extra text.',
@@ -235,8 +238,10 @@ async function aiGenVariant(task) {
       `4. Topic: ${task.anchor}. Mention the value of the resource found at the target page without spelling out the URL.`,
       `5. Writing angle for this round: ${angle}.`,
       '6. Do not mention being an AI.'
-    ].join('\n');
-    const content = await aiChat(s, [{ role: 'system', content: sys }, { role: 'user', content: `Anchor phrase: ${task.anchor}\nTarget page: ${task.targetUrl}\nGenerate the JSON now.` }]);
+    ];
+    if (profile) sys.push(`7. The target page belongs to the following website. Keep the content topically relevant to this site, and write as if you genuinely find the resource useful:\n${profile}`);
+    if (ctx) sys.push(`8. Extra context for this task from the site owner:\n${ctx}`);
+    const content = await aiChat(s, [{ role: 'system', content: sys.join('\n') }, { role: 'user', content: `Anchor phrase: ${task.anchor}\nTarget page: ${task.targetUrl}\nGenerate the JSON now.` }]);
     const m = content.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('AI 返回内容无法解析');
     let parsed; try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error('AI 返回 JSON 解析失败'); }
@@ -422,6 +427,7 @@ async function api(req, res, url) {
     const task = {
       id: uid('t'), targetUrl, anchor,
       templateId: b.templateId || null, platform: b.platform || '', status: '待发',
+      context: String(b.context || '').trim().slice(0, 500),
       landingUrl: '', variant: null, checkHistory: [],
       createdAt: Date.now(), publishedAt: null, lastCheckAt: 0
     };
@@ -433,12 +439,12 @@ async function api(req, res, url) {
     const task = db.tasks.find(t => t.id === p.split('/')[3]);
     if (!task) return json(res, 404, { error: '任务不存在' });
     const b = await readBody(req);
-    for (const k of ['targetUrl', 'anchor', 'templateId', 'platform', 'landingUrl']) {
+    for (const k of ['targetUrl', 'anchor', 'templateId', 'platform', 'landingUrl', 'context']) {
       if (k in b) {
         if (k === 'targetUrl' && b.targetUrl && !/^https?:\/\//.test(b.targetUrl.trim())) return json(res, 400, { error: '目标 URL 需以 http(s):// 开头' });
         if (k === 'landingUrl' && b.landingUrl && !/^https?:\/\//.test(String(b.landingUrl).trim())) return json(res, 400, { error: '落地 URL 需以 http(s):// 开头' });
         if (k === 'anchor' && (!String(b.anchor).trim() || String(b.anchor).trim().length > 100)) return json(res, 400, { error: '锚文本不能为空且不超过 100 字符' });
-        task[k] = k === 'targetUrl' || k === 'anchor' ? String(b[k]).trim() : b[k];
+        task[k] = k === 'targetUrl' || k === 'anchor' ? String(b[k]).trim() : k === 'context' ? String(b[k] || '').trim().slice(0, 500) : b[k];
         if ((k === 'targetUrl' || k === 'anchor') && task.variant) {
           // 内容参数变化后，固定变体中的链接/锚文本同步刷新
           task.variant.bodyHtml = bodyToHtml(task.variant.bodyText, task.anchor, task.targetUrl);
@@ -485,16 +491,17 @@ async function api(req, res, url) {
   }
   if (m === 'GET' && p === '/api/settings') {
     const s = db.settings;
-    return json(res, 200, { aiEnabled: s.aiEnabled, aiBaseUrl: s.aiBaseUrl, aiModel: s.aiModel, aiTemperature: s.aiTemperature, hasKey: !!s.aiApiKey });
+    return json(res, 200, { aiEnabled: s.aiEnabled, aiBaseUrl: s.aiBaseUrl, aiModel: s.aiModel, aiTemperature: s.aiTemperature, siteProfile: s.siteProfile || '', hasKey: !!s.aiApiKey });
   }
   if (m === 'PUT' && p === '/api/settings') {
     const b = await readBody(req);
     for (const k of ['aiEnabled', 'aiBaseUrl', 'aiModel']) if (k in b) db.settings[k] = k === 'aiEnabled' ? !!b[k] : String(b[k]).trim();
     if ('aiTemperature' in b) { const v = Number(b.aiTemperature); db.settings.aiTemperature = isNaN(v) ? 0.9 : Math.min(1.2, Math.max(0, v)); }
+    if ('siteProfile' in b) db.settings.siteProfile = String(b.siteProfile || '').trim().slice(0, 2000);
     if (b.aiApiKey === null) db.settings.aiApiKey = '';
     else if (typeof b.aiApiKey === 'string' && b.aiApiKey.trim()) db.settings.aiApiKey = b.aiApiKey.trim();
     saveDb();
-    return json(res, 200, { aiEnabled: db.settings.aiEnabled, aiBaseUrl: db.settings.aiBaseUrl, aiModel: db.settings.aiModel, aiTemperature: db.settings.aiTemperature, hasKey: !!db.settings.aiApiKey });
+    return json(res, 200, { aiEnabled: db.settings.aiEnabled, aiBaseUrl: db.settings.aiBaseUrl, aiModel: db.settings.aiModel, aiTemperature: db.settings.aiTemperature, siteProfile: db.settings.siteProfile, hasKey: !!db.settings.aiApiKey });
   }
 
   if (m === 'POST' && p.startsWith('/api/tasks/') && p.endsWith('/generate')) {
