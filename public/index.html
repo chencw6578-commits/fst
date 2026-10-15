@@ -82,6 +82,7 @@
     <button class="tab on" data-tab="tasks">外链任务</button>
     <button class="tab" data-tab="tpls">文案模板</button>
     <button class="tab" data-tab="rules">平台规则</button>
+    <button class="tab" data-tab="settings">设置</button>
     <button class="tab" data-tab="help">使用说明</button>
   </nav>
 
@@ -121,6 +122,29 @@
     <div id="ruleList"></div>
   </section>
 
+  <!-- ========= 设置 ========= -->
+  <section id="tab-settings">
+    <div class="card">
+      <h3>AI 内容生成（可选）</h3>
+      <p class="muted">配置后，在油猴脚本「拉取任务」时自动调用 AI 生成不重复的标题和正文（替代 Spin 模板）；也可在任务列表对单个任务手动生成。支持所有 OpenAI 兼容接口：DeepSeek、智谱 GLM、OpenAI、本地 Ollama 等。生成失败时自动回退到 Spin 模板。</p>
+      <label style="margin-top:14px"><input type="checkbox" id="sAiEnabled"> 启用 AI 生成</label>
+      <div class="grid2">
+        <div><label>API Base URL</label><input id="sBase" style="width:100%" placeholder="https://api.deepseek.com/v1"></div>
+        <div><label>模型名</label><input id="sModel" style="width:100%" placeholder="deepseek-chat / glm-4-flash / gpt-4o-mini …"></div>
+      </div>
+      <label>API Key（留空表示不修改；仅保存在本机 data/db.json）</label>
+      <input id="sKey" type="password" style="width:100%" placeholder="sk-…">
+      <label>temperature（0–1.2，越大越多样，默认 0.9）</label>
+      <input id="sTemp" type="number" step="0.1" min="0" max="1.2" style="width:120px">
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn" onclick="saveSettings()">保存设置</button>
+        <button class="btn ghost" onclick="testAI()">测试连接</button>
+        <span id="aiTestResult" class="muted"></span>
+      </div>
+      <div class="note" style="margin-top:14px">⚠ 隐私提示：启用后，任务的锚文本与目标 URL 会发送给你所配置的 AI 服务商用于生成内容；不启用则所有数据只留在本机。</div>
+    </div>
+  </section>
+
   <!-- ========= 说明 ========= -->
   <section id="tab-help">
     <div class="card">
@@ -139,6 +163,7 @@
         <li>脚本激活条件：当前网站域名命中「平台规则」且规则未停用；「通用启发式（兜底）」规则会对所有站点生效，可按需停用。</li>
         <li>填充不准确时，用面板上的「拾取选择器」功能点选目标输入框，把得到的选择器填进对应平台规则里。</li>
         <li>所有数据仅保存在本机 <span class="code" id="dbPath">data/db.json</span>，脚本只与本机管理台通信。</li>
+        <li>想让内容全自动生成：到「设置」页配置 AI（任意 OpenAI 兼容接口），拉取任务时自动出稿；或在任务列表点「AI 生成」+「查看内容」。</li>
         <li>自动收录检测依赖 Bing 的可用性，触发反爬时会得到「未确认」，人工复核是正式流程的一部分。</li>
       </ul>
     </div>
@@ -210,16 +235,19 @@ function taskRow(t) {
   const hist = (t.checkHistory || []).map(h => `${fmtTime(h.at)} → ${h.result}${h.detail ? '（' + h.detail + '）' : ''}`).join('\n');
   const ops = [];
   if (t.status === '待发') ops.push(`<button class="btn sm gray" onclick="openTaskModal('${t.id}')">编辑</button>`,
-    `<button class="btn sm gray" onclick="markFailed('${t.id}')">标记失败</button>`);
+    `<button class="btn sm ghost" onclick="aiGenerate('${t.id}')">AI 生成</button>`);
+  if (t.variant) ops.push(`<button class="btn sm gray" onclick="previewVariant('${t.id}')">查看内容</button>`);
+  if (t.status === '待发') ops.push(`<button class="btn sm gray" onclick="markFailed('${t.id}')">标记失败</button>`);
   if (PUBLISHED_SET.includes(t.status)) ops.push(
     `<button class="btn sm" onclick="checkOne('${t.id}')">检测收录</button>`,
     `<button class="btn sm gray" onclick="openCheckPage('${t.id}')">打开检测页</button>`,
     `<button class="btn sm gray" onclick="markFailed('${t.id}')">标记失败</button>`);
   if (t.status === '失败') ops.push(`<button class="btn sm" onclick="resetTask('${t.id}')">重置为待发</button>`);
   ops.push(`<button class="btn sm danger" onclick="delTask('${t.id}', ${t.status === '已发布' || PUBLISHED_SET.includes(t.status) ? 'true' : 'false'})">删除</button>`);
+  const src = t.variant ? (t.variant.source === 'ai' ? 'AI 生成' : '模板') : '';
   return `<tr>
     <td><input type="checkbox" class="rowSel" data-id="${t.id}" ${PUBLISHED_SET.includes(t.status) ? '' : 'disabled'} onchange="updateCheckBtn()"></td>
-    <td><b>${esc(t.anchor)}</b><div class="muted">${tplName(t.templateId)}${t.variant ? ' · 已取定变体' : ''}</div></td>
+    <td><b>${esc(t.anchor)}</b><div class="muted">${tplName(t.templateId)}${t.variant ? ' · 内容已取定（' + src + '）' : ''}</div></td>
     <td><a class="url" href="${esc(t.targetUrl)}" target="_blank" title="${esc(t.targetUrl)}">${esc(t.targetUrl)}</a></td>
     <td>${esc(t.platform) || '<span class="muted">—</span>'}</td>
     <td><span class="badge b-${t.status}" title="${esc(hist)}">${t.status}</span>${hist ? `<div class="muted" style="font-size:11px">检测 ${t.checkHistory.length} 次</div>` : ''}</td>
@@ -419,8 +447,56 @@ async function delRule(id) {
   catch (e) { toast(e.message, true); }
 }
 
+/* ================= AI 生成与设置 ================= */
+async function aiGenerate(id) {
+  toast('正在调用 AI 生成内容…（最长约 60 秒）');
+  try {
+    const r = await api(`/api/tasks/${id}/generate`, { method: 'POST', body: '{}' });
+    await loadState(); rerenderAll();
+    previewVariant(id, r.anchorMissing ? '⚠ AI 生成的内容未包含锚文本，请检查后手动补充链接' : null);
+  } catch (e) { toast(e.message, true); }
+}
+function previewVariant(id, warn) {
+  const t = db.tasks.find(x => x.id === id);
+  if (!t || !t.variant) { toast('该任务还没有固定内容：待发任务可点「AI 生成」，或在油猴脚本拉取时自动生成', true); return; }
+  const src = t.variant.source === 'ai' ? 'AI 生成' : 'Spin 模板';
+  showModal(`<h3>任务内容预览 <span class="badge b-待发">${src}</span></h3>
+    ${warn ? `<div class="err" style="display:block">${esc(warn)}</div>` : ''}
+    <label>标题</label><div class="code" style="padding:8px 12px">${esc(t.variant.title)}</div>
+    <label>正文（锚文本出现处已渲染为超链接）</label>
+    <div class="code" style="padding:8px 12px">${esc(t.variant.bodyText)}</div>
+    <label>落地 URL</label><div class="code" style="padding:8px 12px">${esc(t.targetUrl)}</div>
+    <div id="modalActs"><button class="btn gray" onclick="closeModal()">关闭</button></div>`);
+}
+async function loadSettings() {
+  try {
+    const s = await api('/api/settings');
+    $('sAiEnabled').checked = s.aiEnabled;
+    $('sBase').value = s.aiBaseUrl || '';
+    $('sModel').value = s.aiModel || '';
+    $('sTemp').value = s.aiTemperature;
+    $('sKey').placeholder = s.hasKey ? '已保存（留空则不修改）' : 'sk-…';
+  } catch (e) { }
+}
+async function saveSettings() {
+  try {
+    const body = { aiEnabled: $('sAiEnabled').checked, aiBaseUrl: $('sBase').value, aiModel: $('sModel').value, aiTemperature: $('sTemp').value };
+    const key = $('sKey').value.trim();
+    if (key) body.aiApiKey = key;
+    const s = await api('/api/settings', { method: 'PUT', body: JSON.stringify(body) });
+    $('sKey').value = '';
+    $('sKey').placeholder = s.hasKey ? '已保存（留空则不修改）' : 'sk-…';
+    toast('设置已保存' + (s.aiEnabled && !s.hasKey ? '（注意：已启用但未填 API Key）' : ''));
+  } catch (e) { toast(e.message, true); }
+}
+async function testAI() {
+  const el = $('aiTestResult'); el.textContent = '测试中…';
+  try { const r = await api('/api/settings/test', { method: 'POST', body: '{}' }); el.textContent = r.ok ? '✓ ' + r.message : '✗ ' + r.message; el.style.color = r.ok ? 'var(--ok)' : 'var(--bad)'; }
+  catch (e) { el.textContent = '✗ ' + e.message; el.style.color = 'var(--bad)'; }
+}
+
 /* ================= 启动 ================= */
-loadState().then(rerenderAll).catch(() => { rerenderAll(); });
+loadState().then(() => { rerenderAll(); loadSettings(); }).catch(() => { rerenderAll(); });
 </script>
 </body>
 </html>

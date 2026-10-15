@@ -129,13 +129,16 @@
         current = { task: r.data.task, rule: r.data.rule || rule };
         filled = false;
         const v = current.task.variant;
+        const src = v.source === 'ai' ? 'AI 生成' : '模板变体';
         $id('fst-task').innerHTML = `
-          <div>锚文本：<b>${esc2(current.task.anchor)}</b></div>
+          <div>锚文本：<b>${esc2(current.task.anchor)}</b> <span class="fst-badge">${src}</span></div>
           <div style="margin:4px 0">目标：${esc2(current.task.targetUrl)}</div>
           <div style="color:#5b6472">标题：${esc2(v.title)}</div>
           <div style="color:#5b6472;margin-top:4px">正文预览：${esc2(v.bodyText.slice(0, 80))}…</div>
-          ${r.data.dedupWarning ? '<div style="color:#c2780a;margin-top:4px">⚠ 模板变化组合不足，可能与近期内容重复</div>' : ''}`;
-        status('已取定任务并固定变体（多次填充使用同一份内容）');
+          ${r.data.dedupWarning ? '<div style="color:#c2780a;margin-top:4px">⚠ 模板变化组合不足，可能与近期内容重复</div>' : ''}
+          ${v.anchorMissing ? '<div style="color:#c2780a;margin-top:4px">⚠ AI 内容未包含锚文本，发布前请手动插入链接</div>' : ''}
+          ${r.data.aiNote ? '<div style="color:#c2780a;margin-top:4px">⚠ ' + esc2(r.data.aiNote) + '</div>' : ''}`;
+        status('已取定任务并固定内容（多次填充使用同一份）');
       } catch (e) { status('连接管理台失败：' + e.message + '。可先用「复制内容」手动粘贴（需先拉取过任务）', true); }
     };
 

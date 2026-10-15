@@ -99,7 +99,14 @@ function defaultDb() {
         }
       ];
     })(),
-    recentVariants: {}
+    recentVariants: {},
+    settings: {
+      aiEnabled: false,
+      aiBaseUrl: 'https://api.deepseek.com/v1',
+      aiApiKey: '',
+      aiModel: 'deepseek-chat',
+      aiTemperature: 0.9
+    }
   };
 }
 function loadDb() {
@@ -107,6 +114,8 @@ function loadDb() {
     db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
     const d = defaultDb();
     for (const k of ['tasks', 'templates', 'rules', 'recentVariants']) if (db[k] == null) db[k] = d[k];
+    if (!db.settings) db.settings = d.settings;
+    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiTemperature']) if (db.settings[k] == null) db.settings[k] = d.settings[k];
   } catch (e) { db = defaultDb(); saveDb(); }
 }
 function saveDb() {
@@ -177,10 +186,10 @@ function generateVariant(task, tpl, opts) {
     const bodyText = spinRender(fillVars(tpl.bodyTpl, vars));
     const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText).digest('hex');
     if (!recent.includes(hash)) {
-      variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, generatedAt: Date.now() };
+      variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() };
       break;
     }
-    if (attempt === 49) { dedupWarning = true; variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, generatedAt: Date.now() }; }
+    if (attempt === 49) { dedupWarning = true; variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() }; }
   }
   if (!opts.dryRun) {
     recent.push(variant.hash);
@@ -188,6 +197,64 @@ function generateVariant(task, tpl, opts) {
     saveDb();
   }
   return { variant, dedupWarning };
+}
+
+/* ================= AI 内容生成（OpenAI 兼容接口） ================= */
+const AI_ANGLES = ["a beginner's guide", 'a personal experience share', 'a resource recommendation', 'common mistakes to avoid', 'quick practical tips', 'a roundup of useful tools'];
+async function aiChat(settings, messages, timeoutMs) {
+  const url = settings.aiBaseUrl.replace(/\/+$/, '') + '/chat/completions';
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs || 60000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + settings.aiApiKey },
+      body: JSON.stringify({ model: settings.aiModel, messages, temperature: Number(settings.aiTemperature) || 0.9 }),
+      signal: ctl.signal
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'HTTP ' + res.status);
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  } finally { clearTimeout(timer); }
+}
+// 生成一次 AI 变体：正文自然包含锚文本，链接由 bodyToHtml 强制插入
+async function aiGenVariant(task) {
+  const s = db.settings;
+  if (!s.aiEnabled || !s.aiApiKey || !s.aiBaseUrl || !s.aiModel) throw new Error('AI 配置不完整，请到「设置」页配置');
+  const recent = db.recentVariants['_ai'] || (db.recentVariants['_ai'] = []);
+  let variant = null, anchorMissing = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const angle = AI_ANGLES[Math.floor(Math.random() * AI_ANGLES.length)];
+    const sys = [
+      'You are an SEO content writer. Generate content for a blog post that will be published on a third-party blog.',
+      'Respond with ONLY a JSON object: {"title": "...", "body": "..."} — no markdown fences, no extra text.',
+      'Requirements:',
+      '1. title: 8-14 English words, natural and specific.',
+      '2. body: 120-220 English words, 2-3 paragraphs separated by \\n\\n, plain text only (no markdown, no URLs).',
+      `3. The anchor phrase "${task.anchor}" must appear naturally in the body 1-2 times (it will be hyperlinked to the target page by the system).`,
+      `4. Topic: ${task.anchor}. Mention the value of the resource found at the target page without spelling out the URL.`,
+      `5. Writing angle for this round: ${angle}.`,
+      '6. Do not mention being an AI.'
+    ].join('\n');
+    const content = await aiChat(s, [{ role: 'system', content: sys }, { role: 'user', content: `Anchor phrase: ${task.anchor}\nTarget page: ${task.targetUrl}\nGenerate the JSON now.` }]);
+    const m = content.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('AI 返回内容无法解析');
+    let parsed; try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error('AI 返回 JSON 解析失败'); }
+    const title = String(parsed.title || '').trim();
+    const bodyText = String(parsed.body || '').trim();
+    if (!title || !bodyText) throw new Error('AI 返回内容为空');
+    anchorMissing = !bodyText.includes(task.anchor);
+    const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText).digest('hex');
+    if (!recent.includes(hash)) {
+      variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
+      break;
+    }
+    if (attempt === 1) variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
+  }
+  recent.push(variant.hash);
+  while (recent.length > 20) recent.shift();
+  saveDb();
+  return { variant, anchorMissing };
 }
 
 /* ================= 平台规则匹配 ================= */
@@ -332,13 +399,19 @@ async function api(req, res, url) {
     });
     if (!pending.length) return json(res, 200, { rule, task: null, message: '队列为空，没有待发任务' });
     const task = pending[0];
-    let dedupWarning = false;
+    let dedupWarning = false, aiNote = null;
     if (!task.variant) {
-      const tpl = db.templates.find(t => t.id === (task.templateId || 'tpl_default'));
-      const r = generateVariant(task, tpl || db.templates[0]);
+      let r = null;
+      if (db.settings.aiEnabled && db.settings.aiApiKey && db.settings.aiBaseUrl && db.settings.aiModel) {
+        try { r = await aiGenVariant(task); } catch (e) { aiNote = 'AI 生成失败，已回退模板：' + e.message; }
+      }
+      if (!r) {
+        const tpl = db.templates.find(t => t.id === (task.templateId || 'tpl_default'));
+        r = generateVariant(task, tpl || db.templates[0]);
+      }
       task.variant = r.variant; dedupWarning = r.dedupWarning; saveDb();
     }
-    return json(res, 200, { rule, task: taskOut(task), dedupWarning });
+    return json(res, 200, { rule, task: taskOut(task), dedupWarning, aiNote });
   }
 
   if (m === 'POST' && p === '/api/tasks') {
@@ -401,6 +474,38 @@ async function api(req, res, url) {
     task.status = { indexed: '已收录', not_indexed: '未收录', unknown: '未确认' }[r.result];
     saveDb();
     return json(res, 200, { task, result: r });
+  }
+
+  if (m === 'POST' && p === '/api/settings/test') {
+    const s = db.settings;
+    try {
+      const reply = await aiChat(s, [{ role: 'user', content: 'Reply with exactly: OK' }], 20000);
+      return json(res, 200, { ok: true, message: '连接成功，模型响应：' + String(reply).trim().slice(0, 60) });
+    } catch (e) { return json(res, 200, { ok: false, message: '连接失败：' + e.message }); }
+  }
+  if (m === 'GET' && p === '/api/settings') {
+    const s = db.settings;
+    return json(res, 200, { aiEnabled: s.aiEnabled, aiBaseUrl: s.aiBaseUrl, aiModel: s.aiModel, aiTemperature: s.aiTemperature, hasKey: !!s.aiApiKey });
+  }
+  if (m === 'PUT' && p === '/api/settings') {
+    const b = await readBody(req);
+    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiModel']) if (k in b) db.settings[k] = k === 'aiEnabled' ? !!b[k] : String(b[k]).trim();
+    if ('aiTemperature' in b) { const v = Number(b.aiTemperature); db.settings.aiTemperature = isNaN(v) ? 0.9 : Math.min(1.2, Math.max(0, v)); }
+    if (b.aiApiKey === null) db.settings.aiApiKey = '';
+    else if (typeof b.aiApiKey === 'string' && b.aiApiKey.trim()) db.settings.aiApiKey = b.aiApiKey.trim();
+    saveDb();
+    return json(res, 200, { aiEnabled: db.settings.aiEnabled, aiBaseUrl: db.settings.aiBaseUrl, aiModel: db.settings.aiModel, aiTemperature: db.settings.aiTemperature, hasKey: !!db.settings.aiApiKey });
+  }
+
+  if (m === 'POST' && p.startsWith('/api/tasks/') && p.endsWith('/generate')) {
+    const task = db.tasks.find(t => t.id === p.split('/')[3]);
+    if (!task) return json(res, 404, { error: '任务不存在' });
+    if (task.status !== '待发') return json(res, 400, { error: '只有待发任务可生成内容（已发布任务请先标记失败并重置）' });
+    try {
+      const r = await aiGenVariant(task);
+      task.variant = r.variant; saveDb();
+      return json(res, 200, { task, anchorMissing: r.anchorMissing });
+    } catch (e) { return json(res, 502, { error: e.message }); }
   }
 
   if (m === 'POST' && p === '/api/spin-preview') {
