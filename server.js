@@ -106,7 +106,8 @@ function defaultDb() {
       aiApiKey: '',
       aiModel: 'deepseek-chat',
       aiTemperature: 0.9,
-      siteProfile: ''
+      siteProfile: '',
+      siteNiches: []
     }
   };
 }
@@ -116,7 +117,7 @@ function loadDb() {
     const d = defaultDb();
     for (const k of ['tasks', 'templates', 'rules', 'recentVariants']) if (db[k] == null) db[k] = d[k];
     if (!db.settings) db.settings = d.settings;
-    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiTemperature', 'siteProfile']) if (db.settings[k] == null) db.settings[k] = d.settings[k];
+    for (const k of ['aiEnabled', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'aiTemperature', 'siteProfile', 'siteNiches']) if (db.settings[k] == null) db.settings[k] = d.settings[k];
   } catch (e) { db = defaultDb(); saveDb(); }
 }
 function saveDb() {
@@ -172,6 +173,19 @@ function bodyToHtml(text, anchor, targetUrl) {
   const withLinks = text.split(anchor).map(escHtml).join(link);
   return withLinks.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('\n');
 }
+// 书签/目录站需要短描述与标签：Spin 路径自动从正文与锚文本派生（免费、离线）
+function deriveDesc(bodyText) {
+  const p = (bodyText.split(/\n{2,}/)[0] || bodyText).trim();
+  const words = p.split(/\s+/);
+  let out = '';
+  for (const w of words) { if ((out + ' ' + w).trim().length > 180) break; out = (out + ' ' + w).trim(); }
+  return out || p.slice(0, 180);
+}
+function deriveTags(anchor) {
+  const stop = new Set(['best', 'top', 'how', 'the', 'a', 'an', 'for', 'to', 'of', 'and', 'in', 'on', 'with', 'guide', 'tips', 'review']);
+  const tags = String(anchor).toLowerCase().split(/[^a-z0-9\u4e00-\u9fa5]+/).filter(w => w.length > 2 && !stop.has(w));
+  return [...new Set(tags)].slice(0, 5).join(', ');
+}
 function generateVariant(task, tpl, opts) {
   opts = opts || {};
   const vars = {
@@ -185,12 +199,14 @@ function generateVariant(task, tpl, opts) {
     // 先替换变量再渲染 Spin（Spin 引擎会把 {} 当作选项组消费掉）
     const title = spinRender(fillVars(tpl.titleTpl, vars));
     const bodyText = spinRender(fillVars(tpl.bodyTpl, vars));
-    const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText).digest('hex');
+    const desc = deriveDesc(bodyText);
+    const tags = deriveTags(task.anchor);
+    const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText + '\u0000' + desc).digest('hex');
     if (!recent.includes(hash)) {
-      variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() };
+      variant = { title, bodyText, desc, tags, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() };
       break;
     }
-    if (attempt === 49) { dedupWarning = true; variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() }; }
+    if (attempt === 49) { dedupWarning = true; variant = { title, bodyText, desc, tags, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: tpl.id, source: 'spin', generatedAt: Date.now() }; }
   }
   if (!opts.dryRun) {
     recent.push(variant.hash);
@@ -229,18 +245,20 @@ async function aiGenVariant(task) {
     const profile = (db.settings.siteProfile || '').trim();
     const ctx = (task.context || '').trim();
     const sys = [
-      'You are an SEO content writer. Generate content for a blog post that will be published on a third-party blog.',
-      'Respond with ONLY a JSON object: {"title": "...", "body": "..."} — no markdown fences, no extra text.',
+      'You are an SEO content writer. Generate content for a link submission that will be published on a third-party website (blog, bookmark or directory).',
+      'Respond with ONLY a JSON object: {"title": "...", "body": "...", "desc": "...", "tags": ["...", "..."]} — no markdown fences, no extra text.',
       'Requirements:',
       '1. title: 8-14 English words, natural and specific.',
       '2. body: 120-220 English words, 2-3 paragraphs separated by \\n\\n, plain text only (no markdown, no URLs).',
-      `3. The anchor phrase "${task.anchor}" must appear naturally in the body 1-2 times (it will be hyperlinked to the target page by the system).`,
-      `4. Topic: ${task.anchor}. Mention the value of the resource found at the target page without spelling out the URL.`,
-      `5. Writing angle for this round: ${angle}.`,
-      '6. Do not mention being an AI.'
+      '3. desc: 25-40 word plain summary of the body, suitable for a bookmark/directory description field.',
+      '4. tags: 3-5 lowercase keyword tags related to the topic.',
+      `5. The anchor phrase "${task.anchor}" must appear naturally in the body 1-2 times (it will be hyperlinked to the target page by the system).`,
+      `6. Topic: ${task.anchor}. Mention the value of the resource found at the target page without spelling out the URL.`,
+      `7. Writing angle for this round: ${angle}.`,
+      '8. Do not mention being an AI.'
     ];
-    if (profile) sys.push(`7. The target page belongs to the following website. Keep the content topically relevant to this site, and write as if you genuinely find the resource useful:\n${profile}`);
-    if (ctx) sys.push(`8. Extra context for this task from the site owner:\n${ctx}`);
+    if (profile) sys.push(`9. The target page belongs to the following website. Keep the content topically relevant to this site, and write as if you genuinely find the resource useful:\n${profile}`);
+    if (ctx) sys.push(`10. Extra context for this task from the site owner:\n${ctx}`);
     const content = await aiChat(s, [{ role: 'system', content: sys.join('\n') }, { role: 'user', content: `Anchor phrase: ${task.anchor}\nTarget page: ${task.targetUrl}\nGenerate the JSON now.` }]);
     const m = content.match(/\{[\s\S]*\}/);
     if (!m) throw new Error('AI 返回内容无法解析');
@@ -248,13 +266,17 @@ async function aiGenVariant(task) {
     const title = String(parsed.title || '').trim();
     const bodyText = String(parsed.body || '').trim();
     if (!title || !bodyText) throw new Error('AI 返回内容为空');
+    let desc = String(parsed.desc || '').trim();
+    let tags = Array.isArray(parsed.tags) ? parsed.tags.map(x => String(x).trim().toLowerCase()).filter(Boolean).slice(0, 5).join(', ') : String(parsed.tags || '').trim();
+    if (!desc) desc = deriveDesc(bodyText);
+    if (!tags) tags = deriveTags(task.anchor);
     anchorMissing = !bodyText.includes(task.anchor);
-    const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText).digest('hex');
+    const hash = crypto.createHash('sha1').update(title + '\u0000' + bodyText + '\u0000' + desc).digest('hex');
     if (!recent.includes(hash)) {
-      variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
+      variant = { title, bodyText, desc, tags, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
       break;
     }
-    if (attempt === 1) variant = { title, bodyText, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
+    if (attempt === 1) variant = { title, bodyText, desc, tags, bodyHtml: bodyToHtml(bodyText, task.anchor, task.targetUrl), hash, templateId: task.templateId || null, source: 'ai', anchorMissing, generatedAt: Date.now() };
   }
   recent.push(variant.hash);
   while (recent.length > 20) recent.shift();
@@ -381,11 +403,52 @@ function serveStatic(res, file) {
 }
 const taskOut = t => ({ ...t });
 
+/* ================= 外链来源库（只收录运营多年、有真实用户的正规平台，按网站类型推荐） ================= */
+const NICHES = [
+  ['general', '通用'], ['tech', '科技/软件'], ['design', '设计/创意'], ['ecommerce', '电商/购物'],
+  ['fitness', '健康/健身'], ['finance', '金融/理财'], ['travel', '旅游'], ['food', '美食'],
+  ['gaming', '游戏'], ['education', '教育'], ['photo', '摄影'], ['music', '音乐'],
+  ['books', '书籍/文学'], ['chinese', '中文站']
+];
+const LINK_SOURCES = [
+  { id: 'src_medium', name: 'Medium', home: 'https://medium.com', post: 'https://medium.com/new-story', category: '博客平台', niches: ['general', 'tech', 'design', 'fitness', 'finance', 'travel', 'food'], quality: 'A', approval: '即时发布（内容审核严）', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: 'rule_medium', note: '权重高、读者真实。文章要有信息量，外链 1 条自然出现，广告味重会被封号' },
+  { id: 'src_devto', name: 'DEV Community', home: 'https://dev.to', post: 'https://dev.to/enter', category: '博客平台', niches: ['tech', 'general'], quality: 'A', approval: '即时发布', linkAttr: '混合', fields: '标题+正文+标签', auto: true, ruleId: null, note: '开发者社区，技术类内容效果最好，标签必填（已自动生成）' },
+  { id: 'src_hashnode', name: 'Hashnode', home: 'https://hashnode.com', post: 'https://hashnode.com/draft', category: '博客平台', niches: ['tech'], quality: 'A', approval: '即时发布', linkAttr: 'dofollow', fields: '标题+正文', auto: true, ruleId: null, note: '技术博客平台，对技术站是高质量相关外链' },
+  { id: 'src_substack', name: 'Substack', home: 'https://substack.com', post: 'https://substack.com/signup?publish=true', category: '博客平台', niches: ['general', 'finance', 'books', 'food'], quality: 'A', approval: '即时发布', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: null, note: 'Newsletter 平台，公开文章可被索引' },
+  { id: 'src_blogger', name: 'Blogger', home: 'https://www.blogger.com', post: 'https://www.blogger.com/blog/post/create', category: '博客平台', niches: ['general', 'travel', 'food', 'books'], quality: 'A', approval: '即时发布', linkAttr: 'dofollow', fields: '标题+正文', auto: true, ruleId: 'rule_blogger', note: 'Google 自家博客平台，收录快，可养主题相关的免费小站' },
+  { id: 'src_wpcom', name: 'WordPress.com', home: 'https://wordpress.com', post: 'https://wordpress.com/post', category: '博客平台', niches: ['general', 'fitness', 'finance', 'education'], quality: 'A', approval: '即时发布', linkAttr: 'dofollow', fields: '标题+正文', auto: true, ruleId: 'rule_wpcom', note: '免费建站写文，正文建议用面板「复制内容」粘贴' },
+  { id: 'src_tumblr', name: 'Tumblr', home: 'https://www.tumblr.com', post: 'https://www.tumblr.com/new/text', category: '博客平台', niches: ['general', 'design', 'photo', 'music', 'gaming'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: 'rule_tumblr', note: '社区活跃，适合短图文，设计/摄影/流行文化类效果好' },
+  { id: 'src_telegraph', name: 'Telegra.ph', home: 'https://telegra.ph', post: 'https://telegra.ph', category: '博客平台', niches: ['general'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: 'rule_telegraph', note: '免注册即发、最省时，页面权重一般，适合铺量补充' },
+  { id: 'src_livejournal', name: 'LiveJournal', home: 'https://www.livejournal.com', post: 'https://www.livejournal.com/update.bml', category: '博客平台', niches: ['general', 'books', 'music'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: 'rule_livejournal', note: '老牌博客社区，收录稳定' },
+  { id: 'src_reddit', name: 'Reddit', home: 'https://www.reddit.com', post: 'https://www.reddit.com/submit', category: '社区问答', niches: ['general', 'tech', 'gaming', 'fitness', 'finance', 'food', 'travel'], quality: 'A', approval: '社区投票监督', linkAttr: 'nofollow', fields: '标题+正文', auto: true, ruleId: 'rule_reddit', note: '流量大但反感营销：先在相关 subreddit 参与，分享价值内容，硬广会被删' },
+  { id: 'src_quora', name: 'Quora', home: 'https://www.quora.com', post: 'https://www.quora.com/ask', category: '社区问答', niches: ['general', 'education', 'finance', 'tech', 'fitness'], quality: 'A', approval: '需养号后回答', linkAttr: 'nofollow', fields: '回答正文', auto: false, ruleId: null, note: '回答相关问题并自然带链接，新号直接发链接容易被折叠' },
+  { id: 'src_github', name: 'GitHub', home: 'https://github.com', post: 'https://github.com/new', category: '社区问答', niches: ['tech'], quality: 'A', approval: '即时发布', linkAttr: 'dofollow', fields: 'README 正文', auto: false, ruleId: null, note: '技术站可建开源仓库/awesome 清单，README 带站链接，权重极高' },
+  { id: 'src_diigo', name: 'Diigo', home: 'https://www.diigo.com', post: 'https://www.diigo.com/item/new/bookmark', category: '书签收藏', niches: ['general', 'education', 'books'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+描述+标签+链接', auto: true, ruleId: 'rule_diigo', note: '经典书签站，公开书签可被索引，描述和标签会自动生成填充' },
+  { id: 'src_pinterest', name: 'Pinterest', home: 'https://www.pinterest.com', post: 'https://www.pinterest.com/pin-builder/', category: '书签收藏', niches: ['design', 'ecommerce', 'food', 'travel', 'photo', 'fitness'], quality: 'A', approval: '即时发布', linkAttr: 'nofollow', fields: '标题+描述+链接', auto: true, ruleId: 'rule_pinterest', note: '电商/设计/生活类流量巨大，需配图，引流效果大于权重' },
+  { id: 'src_mix', name: 'Mix', home: 'https://mix.com', post: 'https://mix.com/submit', category: '书签收藏', niches: ['general', 'photo', 'food', 'travel'], quality: 'B', approval: '即时发布', linkAttr: 'nofollow', fields: '链接+描述', auto: true, ruleId: null, note: 'StumbleUpon 继承者，提交 URL 即可' },
+  { id: 'src_flipboard', name: 'Flipboard', home: 'https://flipboard.com', post: 'https://flipboard.com', category: '书签收藏', niches: ['general', 'travel', 'food', 'photo', 'finance'], quality: 'B', approval: '即时发布', linkAttr: 'nofollow', fields: '链接+描述', auto: true, ruleId: null, note: '杂志式收藏，建主题杂志收录自己的文章' },
+  { id: 'src_wakelet', name: 'Wakelet', home: 'https://wakelet.com', post: 'https://wakelet.com/explore', category: '书签收藏', niches: ['education', 'general', 'books'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '链接+描述', auto: true, ruleId: null, note: '教育类收藏夹流行，适合教育站' },
+  { id: 'src_behance', name: 'Behance', home: 'https://www.behance.net', post: 'https://www.behance.net/portfolio/editor', category: '设计创意', niches: ['design', 'photo'], quality: 'A', approval: '即时发布', linkAttr: 'nofollow', fields: '作品项目+描述', auto: false, ruleId: null, note: 'Adobe 旗下，设计作品集带站链接，设计站必备' },
+  { id: 'src_dribbble', name: 'Dribbble', home: 'https://dribbble.com', post: 'https://dribbble.com/shots/new', category: '设计创意', niches: ['design', 'photo'], quality: 'A', approval: '即时发布', linkAttr: 'nofollow', fields: '作品+描述', auto: false, ruleId: null, note: '设计师社区，作品描述里可带个人站' },
+  { id: 'src_slideshare', name: 'SlideShare', home: 'https://www.slideshare.net', post: 'https://www.slideshare.net/upload', category: '文档分享', niches: ['education', 'finance', 'tech'], quality: 'B', approval: '即时发布', linkAttr: 'nofollow', fields: '文档+描述', auto: false, ruleId: null, note: '上传 PPT/PDF，简介里带链接，适合知识类内容' },
+  { id: 'src_zhihu', name: '知乎专栏', home: 'https://zhuanlan.zhihu.com', post: 'https://zhuanlan.zhihu.com/write', category: '中文平台', niches: ['chinese', 'general', 'tech', 'fitness', 'finance'], quality: 'A', approval: '内容审核严', linkAttr: 'nofollow', fields: '标题+正文', auto: true, ruleId: null, note: '中文站首选：写干货回答/专栏，链接别放正文开头' },
+  { id: 'src_csdn', name: 'CSDN 博客', home: 'https://www.csdn.net', post: 'https://editor.csdn.net/md/', category: '中文平台', niches: ['chinese', 'tech'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+正文+标签', auto: true, ruleId: null, note: '中文技术博客，收录快，适合程序员向内容' },
+  { id: 'src_jianshu', name: '简书', home: 'https://www.jianshu.com', post: 'https://www.jianshu.com/writer', category: '中文平台', niches: ['chinese', 'general', 'books'], quality: 'B', approval: '即时发布', linkAttr: '混合', fields: '标题+正文', auto: true, ruleId: null, note: '中文写作社区，生活方式类内容适合' }
+];
+
 /* ================= API 路由 ================= */
 async function api(req, res, url) {
   const p = url.pathname, m = req.method;
 
   if (m === 'GET' && p === '/api/state') return json(res, 200, db);
+
+  if (m === 'GET' && p === '/api/sources') {
+    const sel = Array.isArray(db.settings.siteNiches) ? db.settings.siteNiches : [];
+    const sources = LINK_SOURCES
+      .map(s => ({ ...s, match: s.niches.filter(n => sel.includes(n)).length }))
+      .sort((a, b) => b.match - a.match || (a.quality < b.quality ? -1 : a.quality > b.quality ? 1 : 0) || a.name.localeCompare(b.name));
+    return json(res, 200, { niches: NICHES, selected: sel, sources });
+  }
 
   if (m === 'GET' && p === '/api/match') {
     const rule = matchRule(url.searchParams.get('host'), url.searchParams.get('path') || '');
@@ -491,17 +554,18 @@ async function api(req, res, url) {
   }
   if (m === 'GET' && p === '/api/settings') {
     const s = db.settings;
-    return json(res, 200, { aiEnabled: s.aiEnabled, aiBaseUrl: s.aiBaseUrl, aiModel: s.aiModel, aiTemperature: s.aiTemperature, siteProfile: s.siteProfile || '', hasKey: !!s.aiApiKey });
+    return json(res, 200, { aiEnabled: s.aiEnabled, aiBaseUrl: s.aiBaseUrl, aiModel: s.aiModel, aiTemperature: s.aiTemperature, siteProfile: s.siteProfile || '', siteNiches: s.siteNiches || [], hasKey: !!s.aiApiKey });
   }
   if (m === 'PUT' && p === '/api/settings') {
     const b = await readBody(req);
     for (const k of ['aiEnabled', 'aiBaseUrl', 'aiModel']) if (k in b) db.settings[k] = k === 'aiEnabled' ? !!b[k] : String(b[k]).trim();
     if ('aiTemperature' in b) { const v = Number(b.aiTemperature); db.settings.aiTemperature = isNaN(v) ? 0.9 : Math.min(1.2, Math.max(0, v)); }
     if ('siteProfile' in b) db.settings.siteProfile = String(b.siteProfile || '').trim().slice(0, 2000);
+    if ('siteNiches' in b) db.settings.siteNiches = Array.isArray(b.siteNiches) ? b.siteNiches.filter(x => NICHES.some(n => n[0] === x)).slice(0, 14) : [];
     if (b.aiApiKey === null) db.settings.aiApiKey = '';
     else if (typeof b.aiApiKey === 'string' && b.aiApiKey.trim()) db.settings.aiApiKey = b.aiApiKey.trim();
     saveDb();
-    return json(res, 200, { aiEnabled: db.settings.aiEnabled, aiBaseUrl: db.settings.aiBaseUrl, aiModel: db.settings.aiModel, aiTemperature: db.settings.aiTemperature, siteProfile: db.settings.siteProfile, hasKey: !!db.settings.aiApiKey });
+    return json(res, 200, { aiEnabled: db.settings.aiEnabled, aiBaseUrl: db.settings.aiBaseUrl, aiModel: db.settings.aiModel, aiTemperature: db.settings.aiTemperature, siteProfile: db.settings.siteProfile, siteNiches: db.settings.siteNiches || [], hasKey: !!db.settings.aiApiKey });
   }
 
   if (m === 'POST' && p.startsWith('/api/tasks/') && p.endsWith('/generate')) {
@@ -575,7 +639,7 @@ async function api(req, res, url) {
     const rule = {
       id: uid('rule'), name, pattern: b.pattern.trim(), pathIncludes: (b.pathIncludes || '').trim(),
       mode: b.mode === 'heuristic' ? 'heuristic' : 'selector', enabled: b.enabled !== false,
-      sel: { title: (b.sel && b.sel.title) || '', body: (b.sel && b.sel.body) || '', link: (b.sel && b.sel.link) || '', tags: (b.sel && b.sel.tags) || '' },
+      sel: { title: (b.sel && b.sel.title) || '', body: (b.sel && b.sel.body) || '', desc: (b.sel && b.sel.desc) || '', link: (b.sel && b.sel.link) || '', tags: (b.sel && b.sel.tags) || '' },
       updatedAt: Date.now()
     };
     db.rules.push(rule); saveDb();

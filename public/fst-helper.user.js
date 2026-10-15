@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         fst 外链发射台助手
 // @namespace    fst.local.helper
-// @version      0.1.0
-// @description  半自动外链发布：拉取任务、一键填充表单、回填落地 URL。提交/验证码永远由人工完成。
+// @version      0.2.0
+// @description  半自动外链发布：拉取任务、一键填充表单（含书签站描述/标签）、回填落地 URL。提交/验证码永远由人工完成。
 // @match        *://*/*
 // @exclude      *://127.0.0.1:3456/*
 // @exclude      *://localhost:3456/*
@@ -135,6 +135,8 @@
           <div style="margin:4px 0">目标：${esc2(current.task.targetUrl)}</div>
           <div style="color:#5b6472">标题：${esc2(v.title)}</div>
           <div style="color:#5b6472;margin-top:4px">正文预览：${esc2(v.bodyText.slice(0, 80))}…</div>
+          ${v.desc ? `<div style="color:#5b6472;margin-top:4px">描述：${esc2(v.desc)}</div>` : ''}
+          ${v.tags ? `<div style="color:#8a93a3;margin-top:4px">标签：${esc2(v.tags)}</div>` : ''}
           ${r.data.dedupWarning ? '<div style="color:#c2780a;margin-top:4px">⚠ 模板变化组合不足，可能与近期内容重复</div>' : ''}
           ${v.anchorMissing ? '<div style="color:#c2780a;margin-top:4px">⚠ AI 内容未包含锚文本，发布前请手动插入链接</div>' : ''}
           ${r.data.aiNote ? '<div style="color:#c2780a;margin-top:4px">⚠ ' + esc2(r.data.aiNote) + '</div>' : ''}`;
@@ -146,17 +148,21 @@
     $id('fst-fill').onclick = () => {
       if (!current) { status('请先拉取任务', true); return; }
       const v = current.task.variant, sel = current.rule.sel || {};
-      const report = { title: false, body: false, link: false, missing: [] };
+      const report = { title: false, body: false, link: false, desc: false, tags: false, missing: [] };
       if (current.rule.mode === 'heuristic') fillHeuristic(v, report);
       else {
         report.title = sel.title ? fillField(selectOne(sel.title), v.title) : (report.missing.push('标题选择器未配置'), false);
         report.body = sel.body ? fillField(selectOne(sel.body), v.bodyText, v.bodyHtml) : (report.missing.push('正文选择器未配置'), false);
         if (sel.link) report.link = fillField(selectOne(sel.link), current.task.targetUrl);
+        if (sel.desc) report.desc = fillField(selectOne(sel.desc), v.desc || v.bodyText.slice(0, 180));
+        if (sel.tags) report.tags = fillField(selectOne(sel.tags), v.tags || current.task.anchor);
       }
       filled = report.title || report.body;
       let msg = [];
       msg.push((report.title ? '✓ 标题' : '✗ 标题') + ' ' + (report.body ? '✓ 正文' : '✗ 正文'));
       if (sel.link || current.rule.mode === 'heuristic') msg.push(report.link ? '✓ 链接' : '— 链接');
+      if (sel.desc && report.desc) msg.push('✓ 描述');
+      if (sel.tags && report.tags) msg.push('✓ 标签');
       if (!filled || report.missing.length || (!report.title || !report.body)) {
         status(msg.join('　') + '。部分字段未找到：' + (report.missing.join('、') || '请检查页面结构') + '，可用「复制内容」手动粘贴，或用「拾取选择器」校正规则', true);
       } else {
@@ -221,13 +227,21 @@
         [...document.querySelectorAll('input[type="text"], input:not([type])')].filter(visible)
           .find(el => /url|link|source|网址|链接/i.test([el.name, el.id, el.placeholder].join(' ')));
       report.link = linkEl ? fillField(linkEl, current.task.targetUrl) : false;
+      // 描述（书签/目录站常见）：name/id/placeholder 含 desc/summary/about
+      const descEl = [...document.querySelectorAll('textarea, input[type="text"], input:not([type])')].filter(visible)
+        .find(el => el !== titleEl && el !== bodyEl && /desc|summary|about|简介|描述/i.test([el.name, el.id, el.placeholder].join(' ')));
+      if (descEl) fillField(descEl, v.desc || v.bodyText.slice(0, 180));
+      // 标签
+      const tagsEl = [...document.querySelectorAll('input[type="text"], input:not([type])')].filter(visible)
+        .find(el => /tag|keyword|标签/i.test([el.name, el.id, el.placeholder].join(' ')));
+      if (tagsEl) fillField(tagsEl, v.tags || current.task.anchor);
     }
 
     /* 复制兜底 */
     $id('fst-copy').onclick = () => {
       if (!current) { status('请先拉取任务', true); return; }
       const v = current.task.variant;
-      const text = v.title + '\n\n' + v.bodyText + '\n\n' + current.task.targetUrl;
+      const text = v.title + '\n\n' + v.bodyText + (v.desc ? '\n\n描述：' + v.desc : '') + (v.tags ? '\n\n标签：' + v.tags : '') + '\n\n' + current.task.targetUrl;
       if (typeof GM_setClipboard === 'function') { GM_setClipboard(text, 'text'); status('已复制标题+正文+链接到剪贴板，可手动粘贴'); }
       else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => status('已复制到剪贴板')).catch(() => status('复制失败，请手动复制', true));
     };

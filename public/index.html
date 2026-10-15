@@ -68,6 +68,10 @@
   #toast.err{background:var(--bad)}
   .landingCell{cursor:pointer}
   .landingCell input{width:180px;font-size:12.5px;padding:3px 8px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;color:var(--ink2)}
+  .chip:hover{border-color:var(--accent)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .card.matched{border-left:3px solid var(--accent)}
   .code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;word-break:break-all}
   .steps li{margin:8px 0}
 </style>
@@ -80,6 +84,7 @@
   </header>
   <nav>
     <button class="tab on" data-tab="tasks">外链任务</button>
+    <button class="tab" data-tab="rec">外链推荐</button>
     <button class="tab" data-tab="tpls">文案模板</button>
     <button class="tab" data-tab="rules">平台规则</button>
     <button class="tab" data-tab="settings">设置</button>
@@ -88,6 +93,7 @@
 
   <!-- ========= 任务 ========= -->
   <section id="tab-tasks" class="on">
+    <div class="card" id="statsBar" style="padding:10px 16px;font-size:13.5px"></div>
     <div class="toolbar">
       <select id="fStatus" style="width:120px">
         <option value="">全部状态</option>
@@ -108,6 +114,17 @@
     <div class="empty" id="taskEmpty">还没有任务，点击右上角「＋ 新建任务」创建第一条外链任务</div>
   </section>
 
+  <!-- ========= 外链推荐 ========= -->
+  <section id="tab-rec">
+    <div class="card">
+      <h3>我的网站类型 <span class="muted" style="font-weight:normal;font-size:12.5px">多选，选完自动保存，匹配的来源会置顶</span></h3>
+      <div id="nicheChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+      <p class="muted" style="margin:10px 0 0">推荐库只收录运营多年、有真实用户、收录稳定的正规平台（无站群/PBN 垃圾源）。「质量 A」= 权重高或流量大；nofollow 平台不直接传权重，但带来真实流量与曝光，是健康外链组合的一部分。</p>
+    </div>
+    <div class="muted" id="recCount" style="margin:10px 2px"></div>
+    <div id="recList"></div>
+  </section>
+
   <!-- ========= 模板 ========= -->
   <section id="tab-tpls">
     <div class="toolbar"><span class="muted">模板支持 Spin 语法 <span class="code">{选项1|选项2}</span> 与变量 <span class="code">{锚文本}</span> <span class="code">{目标URL}</span> <span class="code">{日期}</span>，可嵌套一层</span>
@@ -126,7 +143,7 @@
   <section id="tab-settings">
     <div class="card">
       <h3>AI 内容生成（可选）</h3>
-      <p class="muted">配置后，在油猴脚本「拉取任务」时自动调用 AI 生成不重复的标题和正文（替代 Spin 模板）；也可在任务列表对单个任务手动生成。支持所有 OpenAI 兼容接口：DeepSeek、智谱 GLM、OpenAI、本地 Ollama 等。生成失败时自动回退到 Spin 模板。</p>
+      <p class="muted">配置后，在油猴脚本「拉取任务」时自动调用 AI 生成不重复的标题、正文、描述和标签（替代 Spin 模板）；也可在任务列表对单个任务手动生成。支持所有 OpenAI 兼容接口。生成失败时自动回退到 Spin 模板。<b>零费用方案</b>：智谱 GLM-4.7-Flash（官方免费模型，模型名填 <span class="code">glm-4.7-flash</span>）或本地 <span class="code">Ollama</span>，正常发链强度下 0 成本；不启用 AI 则完全离线免费。</p>
       <label style="margin-top:14px"><input type="checkbox" id="sAiEnabled"> 启用 AI 生成</label>
       <div class="grid2">
         <div><label>API Base URL</label><input id="sBase" style="width:100%" placeholder="https://api.deepseek.com/v1"></div>
@@ -167,6 +184,8 @@
         <li>填充不准确时，用面板上的「拾取选择器」功能点选目标输入框，把得到的选择器填进对应平台规则里。</li>
         <li>所有数据仅保存在本机 <span class="code" id="dbPath">data/db.json</span>，脚本只与本机管理台通信。</li>
         <li>想让内容全自动生成：到「设置」页配置 AI（任意 OpenAI 兼容接口），拉取任务时自动出稿；或在任务列表点「AI 生成」+「查看内容」。<b>记得在「设置」页填写「网站背景资料」</b>，让 AI 知道你的网站是做什么的，内容才会贴合主题；单条任务还可在创建/编辑时填「背景备注」做更精确的引导。</li>
+        <li>外链质量原则：只从「外链推荐」页的精选正规平台发链，优先发与网站类型匹配的平台；每条内容唯一（Spin 变体或 AI 生成），避免同文群发被判定为垃圾外链。书签/目录站的描述与标签已自动生成。</li>
+        <li>费用：工具本体与数据全部本地免费。内容生成默认用 Spin 模板（完全免费离线）；想用 AI 时建议接智谱 GLM-4.7-Flash（官方免费模型）或本地 Ollama，0 成本。</li>
         <li>自动收录检测依赖 Bing 的可用性，触发反爬时会得到「未确认」，人工复核是正式流程的一部分。</li>
       </ul>
     </div>
@@ -200,7 +219,59 @@ async function loadState() {
   try { db = await api('/api/state'); $('srvDot').textContent = '● 已连接'; $('srvDot').className = ''; }
   catch (e) { $('srvDot').textContent = '● 服务未连接'; $('srvDot').className = 'off'; throw e; }
 }
-function rerenderAll() { renderTasks(); renderTpls(); renderRules(); }
+function rerenderAll() { renderTasks(); renderStats(); renderTpls(); renderRules(); }
+
+/* ================= 申请统计（显示申请了哪些外链、有没有通过） ================= */
+function renderStats() {
+  const t = db.tasks;
+  const sent = t.filter(x => PUBLISHED_SET.includes(x.status)).length;
+  const indexed = t.filter(x => x.status === '已收录').length;
+  const pending = t.filter(x => x.status === '待发').length;
+  const failed = t.filter(x => x.status === '失败').length;
+  $('statsBar').innerHTML = t.length
+    ? `外链申请一览：共 <b>${t.length}</b> 条 · 待发 <b>${pending}</b> · 已发出 <b>${sent}</b> · 已收录（通过）<b style="color:var(--ok)">${indexed}</b> · 收录率 <b>${sent ? Math.round(indexed / sent * 100) : 0}%</b>${failed ? ` · 失败 <b>${failed}</b>` : ''} <span class="muted">（已发出 = 已在目标平台发布成功；通过 = 已被搜索引擎收录。每条明细见下方任务表）</span>`
+    : `<span class="muted">还没有申请记录：去「外链推荐」按网站类型挑平台，点「创建任务」开始第一条外链</span>`;
+}
+
+/* ================= 外链推荐（按网站类型） ================= */
+let srcData = null;
+async function loadSources() {
+  try { srcData = await api('/api/sources'); renderRec(); } catch (e) { }
+}
+function renderRec() {
+  if (!srcData) return;
+  const { niches, selected, sources } = srcData;
+  $('nicheChips').innerHTML = niches.map(([k, label]) =>
+    `<button class="chip ${selected.includes(k) ? 'on' : ''}" data-k="${k}">${esc(label)}</button>`).join('');
+  [...$('nicheChips').children].forEach(c => c.onclick = () => toggleNiche(c.dataset.k));
+  $('recCount').textContent = selected.length
+    ? `已按你的网站类型排序：类型匹配的来源置顶（共 ${sources.length} 个精选来源，无垃圾站群）`
+    : `先勾选上方网站类型，匹配的来源会置顶推荐（共 ${sources.length} 个精选来源，无垃圾站群）`;
+  $('recList').innerHTML = sources.map(s => `
+    <div class="card ${s.match ? 'matched' : ''}">
+      <h3>${esc(s.name)}
+        <span class="badge ${s.quality === 'A' ? 'b-已收录' : 'b-待发'}">质量 ${s.quality}</span>
+        ${s.match ? '<span class="badge b-待发">类型匹配</span>' : ''}
+        <span><a class="btn sm ghost" href="${esc(s.post || s.home)}" target="_blank" rel="noopener">去发帖 ↗</a>
+        <button class="btn sm" onclick="createFromSource('${s.id}')">创建任务</button></span></h3>
+      <div class="muted">${esc(s.category)} · ${esc(s.approval)} · 链接属性 ${esc(s.linkAttr)} · 需填 ${esc(s.fields)} · 自动生成 ${s.auto ? '✓ 覆盖全部可填字段' : '△ 需人工补充作品/文档'}</div>
+      <div style="margin-top:4px;font-size:13px">${esc(s.note)}</div>
+    </div>`).join('');
+}
+async function toggleNiche(k) {
+  const sel = srcData.selected.slice();
+  const i = sel.indexOf(k);
+  if (i >= 0) sel.splice(i, 1); else sel.push(k);
+  try {
+    await api('/api/settings', { method: 'PUT', body: JSON.stringify({ siteNiches: sel }) });
+    srcData = await api('/api/sources');
+    renderRec();
+  } catch (e) { toast(e.message, true); }
+}
+function createFromSource(id) {
+  const s = srcData.sources.find(x => x.id === id);
+  if (s) openTaskModal(null, s);
+}
 
 tabEls.forEach(b => b.onclick = () => {
   tabEls.forEach(x => x.classList.remove('on')); b.classList.add('on');
@@ -266,9 +337,11 @@ function updateCheckBtn() {
 }
 $('fStatus').onchange = renderTasks; $('fKw').oninput = renderTasks;
 
-function openTaskModal(id) {
+function openTaskModal(id, src) {
   const t = id ? db.tasks.find(x => x.id === id) : null;
-  showModal(`<h3>${t ? '编辑任务' : '新建任务'}</h3>
+  const plat = t ? t.platform : (src ? src.name : '');
+  const fromSrc = !t && src ? `<div class="muted" style="margin-top:8px">来自推荐：${esc(src.name)}（${esc(src.fields)}）— ${esc(src.note)}</div>` : '';
+  showModal(`<h3>${t ? '编辑任务' : '新建任务'}</h3>${fromSrc}
     <label>目标 URL <span class="req">*</span></label>
     <input id="mUrl" style="width:100%" value="${esc(t && t.targetUrl)}" placeholder="https://example.com/landing-page">
     <label>锚文本 <span class="req">*</span>（≤100 字符，对应模板变量 {锚文本}）</label>
@@ -276,7 +349,7 @@ function openTaskModal(id) {
     <div class="grid2">
       <div><label>关联模板</label><select id="mTpl" style="width:100%">${db.templates.map(x =>
         `<option value="${x.id}" ${t && t.templateId === x.id ? 'selected' : (!t && x.isDefault ? 'selected' : '')}>${esc(x.name)}</option>`).join('')}</select></div>
-      <div><label>平台（可留空，发布时自动识别）</label><input id="mPlat" style="width:100%" value="${esc(t && t.platform)}" placeholder="如 Medium / Diigo"></div>
+      <div><label>平台（可留空，发布时自动识别）</label><input id="mPlat" style="width:100%" value="${esc(plat)}" placeholder="如 Medium / Diigo"></div>
     </div>
     <label>背景备注（可选，≤500 字，告诉 AI 这条外链的特定背景，如发布平台类型、内容侧重点）</label>
     <textarea id="mCtx" style="width:100%" rows="2" placeholder="例：这篇要发在健身类博客，重点提新手选购跑鞋时最容易踩的坑">${esc(t && t.context)}</textarea>
@@ -409,12 +482,13 @@ function renderRules() {
       ${r.mode !== 'heuristic' ? `<div class="grid2" style="margin-top:6px">
         <div class="muted">标题：<span class="code">${esc(r.sel.title) || '—'}</span></div>
         <div class="muted">正文：<span class="code">${esc(r.sel.body) || '—'}</span></div>
+        <div class="muted">描述：<span class="code">${esc(r.sel.desc) || '—'}</span></div>
         <div class="muted">链接：<span class="code">${esc(r.sel.link) || '—'}</span></div>
         <div class="muted">标签：<span class="code">${esc(r.sel.tags) || '—'}</span></div></div>` : ''}
     </div>`).join('');
 }
 function openRuleModal(id) {
-  const r = id ? db.rules.find(x => x.id === id) : { name: '', pattern: '', pathIncludes: '', mode: 'selector', sel: { title: '', body: '', link: '', tags: '' }, enabled: true };
+  const r = id ? db.rules.find(x => x.id === id) : { name: '', pattern: '', pathIncludes: '', mode: 'selector', sel: { title: '', body: '', desc: '', link: '', tags: '' }, enabled: true };
   showModal(`<h3>${id ? '编辑规则' : '新建规则'}</h3>
     <div class="grid2">
       <div><label>规则名称 <span class="req">*</span></label><input id="rName" style="width:100%" value="${esc(r.name)}"></div>
@@ -426,6 +500,7 @@ function openRuleModal(id) {
     </div>
     <label>标题选择器</label><input id="rSelT" style="width:100%" value="${esc(r.sel.title)}" placeholder="input[name=&quot;post_title&quot;]">
     <label>正文选择器（支持 textarea 与 contenteditable 富文本框）</label><input id="rSelB" style="width:100%" value="${esc(r.sel.body)}">
+    <label>描述选择器（书签/目录站的描述字段，可选）</label><input id="rSelD" style="width:100%" value="${esc(r.sel.desc || '')}">
     <label>链接 URL 选择器（可选）</label><input id="rSelL" style="width:100%" value="${esc(r.sel.link)}">
     <label>标签选择器（可选）</label><input id="rSelG" style="width:100%" value="${esc(r.sel.tags)}">
     <div id="modalErr"></div>
@@ -434,7 +509,7 @@ function openRuleModal(id) {
 async function saveRule(id) {
   const body = {
     name: $('rName').value, pattern: $('rPat').value, pathIncludes: $('rPath').value, mode: $('rMode').value,
-    sel: { title: $('rSelT').value, body: $('rSelB').value, link: $('rSelL').value, tags: $('rSelG').value }
+    sel: { title: $('rSelT').value, body: $('rSelB').value, desc: $('rSelD').value, link: $('rSelL').value, tags: $('rSelG').value }
   };
   try {
     if (id) await api('/api/rules/' + id, { method: 'PUT', body: JSON.stringify(body) });
@@ -502,7 +577,7 @@ async function testAI() {
 }
 
 /* ================= 启动 ================= */
-loadState().then(() => { rerenderAll(); loadSettings(); }).catch(() => { rerenderAll(); });
+loadState().then(() => { rerenderAll(); loadSettings(); loadSources(); }).catch(() => { rerenderAll(); });
 </script>
 </body>
 </html>
