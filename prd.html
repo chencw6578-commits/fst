@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fst 外链发射台 · 产品需求文档</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2330; --ink2:#5b6472; --line:#e4e7ec;
+    --accent:#2456e6; --accent-bg:#eef3ff; --ok:#0e9f6e; --ok-bg:#e6f7f0;
+    --warn:#c2780a; --warn-bg:#fdf3e0; --bad:#d92d20; --bad-bg:#fdeceb; --mute:#8a93a3;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+    line-height:1.75;font-size:15px}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 24px 80px}
+  header.hero{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 32px;margin-bottom:20px}
+  header.hero h1{margin:0 0 6px;font-size:26px}
+  header.hero .sub{color:var(--ink2);margin-bottom:14px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 12px;color:var(--ink2);background:var(--bg)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+  nav.toc a{font-size:13px;text-decoration:none;color:var(--accent);background:var(--accent-bg);
+    border-radius:999px;padding:5px 14px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 32px;margin-bottom:20px}
+  h2{font-size:20px;margin:0 0 14px;padding-bottom:10px;border-bottom:2px solid var(--accent)}
+  h2 .id{font-size:12px;color:var(--mute);font-weight:normal;vertical-align:middle;margin-left:8px}
+  h3{font-size:16px;margin:22px 0 8px}
+  p{margin:8px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:var(--bg);font-weight:600;white-space:nowrap}
+  code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .note{background:var(--warn-bg);border-left:3px solid var(--warn);padding:10px 14px;border-radius:6px;font-size:13.5px;margin:12px 0}
+  .danger{background:var(--bad-bg);border-left:3px solid var(--bad);padding:10px 14px;border-radius:6px;font-size:13.5px;margin:12px 0}
+  .ok-note{background:var(--ok-bg);border-left:3px solid var(--ok);padding:10px 14px;border-radius:6px;font-size:13.5px;margin:12px 0}
+  ul,ol{margin:8px 0;padding-left:24px}
+  li{margin:4px 0}
+  .badge{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+  .b-pending{background:var(--accent-bg);color:var(--accent)}
+  .b-published{background:var(--ok-bg);color:var(--ok)}
+  .b-failed{background:var(--bad-bg);color:var(--bad)}
+  .b-indexed{background:#046c4e;color:#fff}
+  .b-notindexed{background:var(--warn-bg);color:var(--warn)}
+  .b-unknown{background:#eef0f3;color:var(--ink2)}
+  /* flow */
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:16px 0}
+  .fstep{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;text-align:center}
+  .fstep.hot{background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .farr{color:var(--mute);font-size:14px}
+  /* demo shell */
+  .demo{border:2px solid var(--accent);border-radius:var(--radius);margin:18px 0;overflow:hidden}
+  .demo-head{background:var(--accent);color:#fff;padding:8px 16px;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+  .demo-body{padding:18px;background:#fbfcfe}
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tab{padding:6px 18px;border:1px solid var(--line);border-radius:8px 8px 0 0;background:#fff;cursor:pointer;font-size:14px}
+  .tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn{display:inline-block;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;
+    padding:7px 16px;font-size:13.5px;cursor:pointer}
+  .btn.ghost{background:#fff;color:var(--accent)}
+  .btn.sm{padding:3px 10px;font-size:12px}
+  .btn.gray{border-color:var(--line);background:#fff;color:var(--ink)}
+  input[type=text],select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    font-size:14px;font-family:inherit;background:#fff}
+  textarea{resize:vertical;min-height:64px}
+  label{font-size:13px;color:var(--ink2);display:block;margin:10px 0 4px}
+  .err{color:var(--bad);font-size:13px;margin-top:6px;display:none}
+  .mockform .field{border:1px dashed var(--line);border-radius:8px;padding:8px 12px;margin:6px 0;color:var(--ink2);font-size:13.5px;background:#fff}
+  .mockform .field.filled{border-style:solid;border-color:var(--ok);color:var(--ink);background:var(--ok-bg)}
+  .panel{position:relative;width:300px;background:#fff;border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 8px 24px rgba(28,35,48,.14);padding:14px;font-size:13.5px;margin-left:auto}
+  .panel .p-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .panel .p-title{font-weight:700;font-size:13.5px}
+  .panel .status{margin-top:8px;color:var(--ink2);font-size:12.5px;min-height:18px}
+  .two-col{display:flex;gap:18px;flex-wrap:wrap}
+  .two-col>*{flex:1;min-width:280px}
+  .mt{margin-top:14px}
+  footer{color:var(--mute);font-size:12.5px;text-align:center;margin-top:30px}
+  .toc-jump{font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>fst · 外链发射台 — 产品需求文档</h1>
+  <div class="sub">面向独立 SEO 操作者的半自动化外链发布辅助工具：本地管理台 + 油猴脚本，主攻海外平台</div>
+  <div class="meta">
+    <span class="chip">版本 v0.1（评审稿）</span>
+    <span class="chip">日期 2026-10-15</span>
+    <span class="chip">状态：待评审</span>
+    <span class="chip">部署形态：本地单机</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#bg">1. 背景与目标</a>
+  <a href="#scope">2. 范围</a>
+  <a href="#flow">3. 核心流程</a>
+  <a href="#fr">4. 功能需求</a>
+  <a href="#shared">5. 共享规则</a>
+  <a href="#open">6. 假设与待定项</a>
+</nav>
+
+<!-- ========== 1 背景与目标 ========== -->
+<section id="bg">
+  <h2>1. 背景与目标</h2>
+  <p>批量建设外链时，操作者需要在多个海外平台（Web2.0 博客、论坛、书签站）重复做同一套动作：打开站点 → 登录 → 新建帖子 → 手工粘贴标题、正文、锚文本 → 提交 → 再到表格里登记记录。其中绝大多数时间消耗在<strong>反复复制粘贴内容</strong>和<strong>整理记录</strong>上，而不是登录、验证码等必须人工处理的环节。</p>
+  <p>因此本产品将流程拆分为「机器负责的部分」与「人工负责的部分」：</p>
+  <ul>
+    <li><strong>机器负责</strong>：维护文案模板并生成不重复变体、按平台规则把内容自动填充进发布表单、记录与状态管理、批量收录检测。</li>
+    <li><strong>人工负责</strong>：登录账号、通过验证码、最终检查并点击提交（产品<strong>不</strong>自动提交）、处理异常。</li>
+  </ul>
+  <p><strong>预期可观察的结果</strong>：操作者在目标平台页面上，从打开新建页到完成提交，只需要人工执行「登录、过验证码、检查、点击提交」四步；每条外链从任务创建到收录状态，全程在管理台中可查。</p>
+</section>
+
+<!-- ========== 2 范围 ========== -->
+<section id="scope">
+  <h2>2. 范围</h2>
+  <h3>P0（首版必须完成）</h3>
+  <table>
+    <tr><th>能力</th><th>完成判定</th></tr>
+    <tr><td>外链任务管理</td><td>可创建、编辑、筛选、删除外链任务，任务带状态</td></tr>
+    <tr><td>文案模板库与变体生成</td><td>支持 Spin 语法与变量占位，实时预览变体，同一任务的变体固定不变</td></tr>
+    <tr><td>油猴脚本自动填充</td><td>在匹配平台页面上出现悬浮面板，一键拉取任务并填充表单字段</td></tr>
+    <tr><td>发布记录与状态追踪</td><td>发布完成后可回填落地 URL，状态机正确流转</td></tr>
+    <tr><td>收录检测</td><td>对「已发布」任务批量检测，产出三态结果，未确认可人工复核</td></tr>
+  </table>
+  <h3>P1（后续迭代，本版不做）</h3>
+  <ul>
+    <li>更多内置平台规则的持续扩充（规则引擎本身是 P0，内置站点数量可迭代）</li>
+    <li>发布效果统计报表（按平台/模板聚合成功率、收录率）</li>
+    <li>多浏览器配置文件 / 多账号轮换调度</li>
+  </ul>
+  <h3>明确排除</h3>
+  <ul>
+    <li>自动点击「提交/发布」按钮、自动过验证码、账号自动注册</li>
+    <li>多用户、云部署、账号密码托管上传（工具只在本机运行，数据不出本机）</li>
+  </ul>
+  <div class="danger"><strong>半自动边界（产品红线）</strong>：脚本永远不代替用户点击目标网站的提交类按钮，不处理验证码，不托管登录态。所有对外发布动作的最终执行者是人。</div>
+</section>
+
+<!-- ========== 3 核心流程 ========== -->
+<section id="flow">
+  <h2>3. 核心流程</h2>
+  <p>一次完整的外链发布旅程如下，<span style="color:var(--accent);font-weight:600">蓝色为机器自动环节</span>，其余为人工环节：</p>
+  <div class="flow">
+    <span class="fstep">① 管理台创建任务<br><span class="toc-jump">目标URL+锚文本+模板</span></span><span class="farr">→</span>
+    <span class="fstep">② 人工登录目标平台<br>进入发帖页</span><span class="farr">→</span>
+    <span class="fstep hot">③ 脚本匹配平台规则<br>悬浮面板出现</span><span class="farr">→</span>
+    <span class="fstep hot">④ 拉取待发任务<br>取定变体内容</span><span class="farr">→</span>
+    <span class="fstep hot">⑤ 一键填充表单</span><span class="farr">→</span>
+    <span class="fstep">⑥ 人工检查内容<br>过验证码</span><span class="farr">→</span>
+    <span class="fstep">⑦ 人工点击提交</span><span class="farr">→</span>
+    <span class="fstep hot">⑧ 回填落地 URL<br>状态→已发布</span><span class="farr">→</span>
+    <span class="fstep hot">⑨ 批量收录检测</span>
+  </div>
+  <p>恢复路径：发布失败（如被删帖、封号、内容被拒）时，任务标记为「失败」并可一键重置回「待发」，重新生成变体或换平台再发。</p>
+</section>
+
+<!-- ========== 4 功能需求 ========== -->
+<section id="fr">
+  <h2>4. 功能需求</h2>
+
+  <!-- FR-01 -->
+  <h3>FR-01 外链任务管理</h3>
+  <p><strong>目的</strong>：管理台的主界面，承载所有待发/已发外链，是其余功能的操作入口。</p>
+  <p><strong>触发</strong>：用户打开管理台首页。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>创建任务必填「目标 URL」与「锚文本」；可选关联一个文案模板（不关联时使用默认通用模板）。</li>
+    <li>目标 URL 校验：必须以 <code>http://</code> 或 <code>https://</code> 开头；锚文本非空且长度 ≤ 100 字符。</li>
+    <li>任务创建后进入「待发」状态，出现在列表顶部；不支持创建时直接指定状态。</li>
+    <li>列表支持按状态筛选（待发 / 已发布 / 失败 / 已收录 / 未收录 / 未确认）和按关键字搜索（锚文本、URL）。</li>
+    <li>删除需二次确认；已发布的任务删除时提示「该任务的发布记录将一并删除」。</li>
+  </ul>
+  <table>
+    <tr><th>字段</th><th>必填</th><th>说明</th></tr>
+    <tr><td>目标 URL</td><td>是</td><td>要推广的页面链接，即锚文本指向的地址</td></tr>
+    <tr><td>锚文本</td><td>是</td><td>外链锚文字，模板中的 <code>{锚文本}</code> 变量取此值</td></tr>
+    <tr><td>关联模板</td><td>否</td><td>默认使用通用模板</td></tr>
+    <tr><td>平台</td><td>否</td><td>发布后由脚本自动识别回填，也可手动指定</td></tr>
+    <tr><td>状态</td><td>系统</td><td>见共享规则中的状态机</td></tr>
+    <tr><td>落地 URL</td><td>发布后</td><td>发出去的帖子/文章的实际链接</td></tr>
+    <tr><td>时间戳</td><td>系统</td><td>创建时间、发布时间、检测时间</td></tr>
+  </table>
+  <p><strong>异常</strong>：URL 格式非法或锚文本为空时阻止创建并给出行内错误提示；列表为空时展示引导文案「还没有任务，点击右上角新建第一条外链任务」。</p>
+
+  <div class="demo">
+    <div class="demo-head"><span>Demo A · 管理台界面示意（FR-01 / FR-02）</span><span>可交互：新建任务、生成变体</span></div>
+    <div class="demo-body">
+      <div class="tabs">
+        <div class="tab on" id="tabA1" onclick="swTab(1)">外链任务</div>
+        <div class="tab" id="tabA2" onclick="swTab(2)">文案模板</div>
+      </div>
+      <!-- 任务 tab -->
+      <div id="paneA1">
+        <button class="btn" onclick="toggleForm()">＋ 新建任务</button>
+        <div id="taskForm" style="display:none;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:12px">
+          <label>目标 URL</label><input type="text" id="inUrl" placeholder="https://example.com/landing-page">
+          <label>锚文本</label><input type="text" id="inAnchor" placeholder="例如：best running shoes">
+          <label>关联模板</label>
+          <select id="inTpl"><option>通用模板（默认）</option><option>测评长文模板</option><option>书签短描述模板</option></select>
+          <div class="err" id="formErr">目标 URL 需以 http(s):// 开头，且锚文本不能为空</div>
+          <div style="margin-top:12px"><button class="btn" onclick="addTask()">创建</button> <button class="btn gray" onclick="toggleForm()">取消</button></div>
+        </div>
+        <table class="mt">
+          <tr><th>锚文本</th><th>目标 URL</th><th>平台</th><th>状态</th><th>操作</th></tr>
+          <tbody id="taskRows"></tbody>
+        </table>
+        <div id="taskEmpty" style="display:none;color:var(--mute);font-size:13.5px;text-align:center;padding:18px 0">
+          还没有任务，点击右上角「＋ 新建任务」创建第一条外链任务
+        </div>
+      </div>
+      <!-- 模板 tab -->
+      <div id="paneA2" style="display:none">
+        <div class="two-col">
+          <div>
+            <label>Spin 模板编辑（支持 <code>{选项1|选项2}</code> 与变量 <code>{锚文本}</code> <code>{目标URL}</code>）</label>
+            <textarea id="spinSrc">Check out this {guide|article|post} about {锚文本}: {目标URL}. I {really|highly} {recommend|suggest} it for {anyone|people} {who is|who is} looking for {tips|advice}.</textarea>
+            <div style="margin-top:10px"><button class="btn" onclick="spinOnce()">🎲 生成一个变体</button></div>
+          </div>
+          <div>
+            <label>变体预览（每次点击生成不同变体，同一任务取定后固定）</label>
+            <div id="spinOut" style="background:var(--accent-bg);border:1px solid var(--accent);border-radius:8px;padding:12px;font-size:14px;min-height:96px;color:var(--ink)">
+              点击左侧「生成一个变体」按钮查看效果
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FR-02 -->
+  <h3>FR-02 文案模板库与变体生成</h3>
+  <p><strong>目的</strong>：避免多个平台发布完全相同的文案（重复内容风险），把「写一次」变成「配一次模板」。</p>
+  <p><strong>触发</strong>：用户在「文案模板」页创建/编辑模板；脚本拉取任务时取定变体。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>模板由「标题模板」与「正文模板」两部分组成，均支持 Spin 语法与变量占位（语法见共享规则）。</li>
+    <li>编辑时实时预览：点击「生成变体」可反复预览不同变体效果。</li>
+    <li><strong>变体取定规则（关键）</strong>：任务第一次被脚本填充时生成并<strong>保存固定变体</strong>，之后该任务无论填充多少次都使用同一份内容；仅当任务被重置为「待发」并选择「换内容」时才重新生成。</li>
+    <li>变体查重：同一模板近期（最近 20 次）生成过的变体不再分配给新任务；若模板组合空间过小导致无法查重，给出提示「该模板变化组合不足，建议增加可选词」。</li>
+    <li>模板可删除；被任务引用的模板删除时提示「仍有 N 个任务引用此模板，删除后这些任务将回退到通用模板」。</li>
+  </ul>
+  <p><strong>异常</strong>：模板 Spin 语法错误（如括号不配对）时，保存被阻止并标出出错位置。</p>
+
+  <!-- FR-03 -->
+  <h3>FR-03 平台规则库</h3>
+  <p><strong>目的</strong>：让脚本知道「当前网站上，标题/正文/链接该填进哪些输入框」。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>一条规则 = 平台名称 + 域名匹配（支持精确域名与通配符，如 <code>*.wordpress.com</code>）+ 字段映射（标题、正文、链接 URL、标签四个槽位，各槽位填写 CSS 选择器）。</li>
+    <li>内置若干常见海外平台示例规则（如 Blogger、Medium、WordPress.com、Diigo 等通用 Web2.0 / 书签站）<span class="toc-jump">[Assumption, TBD：首批内置清单]</span>。</li>
+    <li>用户可在管理台添加、修改、停用自定义规则；添加时提供「在目标页面上点选元素生成选择器」的辅助模式（脚本端辅助拾取），降低配置门槛。</li>
+    <li>一个域名命中多条规则时，取最近更新且未停用的一条；规则停用后该域名视作未匹配。</li>
+  </ul>
+  <p><strong>异常</strong>：页面上按选择器找不到字段时，悬浮面板显示「部分字段未找到，请手动粘贴」并退化为一键复制模式。</p>
+
+  <!-- FR-04 -->
+  <h3>FR-04 油猴脚本（浏览器端助手）</h3>
+  <p><strong>目的</strong>：在目标平台页面上完成内容自动填充与状态回写，是「半自动」的执行端。</p>
+  <p><strong>触发</strong>：脚本随所有网页加载，仅当当前域名命中平台规则库时激活。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>激活后在页面右下角显示悬浮面板：平台名称、当前任务卡片（锚文本 + 变体预览）、操作按钮。</li>
+    <li>「拉取下一个任务」：从管理台取一条「待发」任务（优先取手动指定了当前平台者），并在取定瞬间生成固定变体。</li>
+    <li>「一键填充」：按规则将标题模板渲染结果填入标题框、正文模板渲染结果（含 <code>{锚文本}</code> 超链接的 HTML）填入正文编辑器；若正文编辑器是富文本，优先写入 HTML，失败则降级为纯文本 + 复制兜底。</li>
+    <li>填充后面板显示「已填充，请人工检查后提交」；用户自行完成验证码与提交。</li>
+    <li>提交成功后用户点击面板「标记已发布」，粘贴落地 URL（或由脚本尝试从地址栏预填），任务状态更新为「已发布」。</li>
+    <li>与脚本无法连通管理台时（管理台未启动），面板显示离线提示，并提供「复制当前任务内容」的手动兜底。</li>
+  </ul>
+  <p><strong>异常与空状态</strong>：无待发任务时面板显示「队列为空」；域名未命中规则时面板不出现（或仅显示一个可手动唤起的小图标）。</p>
+
+  <div class="demo">
+    <div class="demo-head"><span>Demo B · 目标网站页面上的脚本悬浮面板（FR-04）</span><span>可交互：拉取任务 → 一键填充 → 标记已发布</span></div>
+    <div class="demo-body">
+      <div class="two-col">
+        <div>
+          <div style="background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden">
+            <div style="background:#2d3748;color:#fff;padding:8px 14px;font-size:13px">📄 example-blog.com — Write a new post</div>
+            <div style="padding:14px" class="mockform">
+              <label style="margin-top:0">Title</label>
+              <div class="field" id="fTitle">（空输入框）</div>
+              <label>Body</label>
+              <div class="field" id="fBody" style="min-height:64px">（正文编辑器）</div>
+              <label>Link URL</label>
+              <div class="field" id="fLink">（链接输入框）</div>
+              <div style="margin-top:10px;color:var(--mute);font-size:12.5px">※ 真实场景中：验证码与「Submit」按钮由你人工完成，脚本不碰提交按钮。</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:13px">
+            <label style="display:inline;margin:0"><input type="checkbox" id="unmatchSw" onchange="toggleUnmatch()"> 模拟「当前站点无匹配规则」</label>
+          </div>
+        </div>
+        <div class="panel" id="fsmPanel">
+          <div class="p-head"><span class="p-title">⚡ fst 助手</span><span class="badge b-pending" id="fsmPlat">已匹配：Generic Blog</span></div>
+          <div id="fsmTask" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);font-size:13px">
+            <div id="fsmEmpty" style="color:var(--mute)">队列为空 / 尚未拉取任务</div>
+            <div id="fsmInfo" style="display:none">
+              <div>锚文本：<b id="fsmAnchor">-</b></div>
+              <div style="margin-top:4px;color:var(--ink2)" id="fsmPrev">变体预览：-</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn sm" onclick="fsmPull()">拉取下一个任务</button>
+            <button class="btn sm ghost" onclick="fsmFill()">一键填充</button>
+            <button class="btn sm gray" onclick="fsmDone()">标记已发布</button>
+          </div>
+          <div class="status" id="fsmStatus">脚本已激活，等待操作</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FR-05 -->
+  <h3>FR-05 发布记录与状态追踪</h3>
+  <p><strong>目的</strong>：让操作者随时掌握每条外链发到哪、发了什么、状态如何。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>任务列表即发布记录：每行展示锚文本、目标 URL、平台、状态、落地 URL、发布时间。</li>
+    <li>状态流转遵循共享规则中的状态机；「已发布」必须填写落地 URL 后才可确认（落地 URL 需以 http(s):// 开头）。</li>
+    <li>「失败」任务支持两个动作：<strong>重置为待发</strong>（可同时勾选「换内容」重新生成变体）与<strong>直接删除</strong>。</li>
+    <li>平台、发布时间由脚本回写；落地 URL 支持脚本预填 + 人工修改。</li>
+  </ul>
+
+  <div class="two-col">
+    <div>
+      <h3 style="margin-top:6px">状态机（canonical）</h3>
+      <svg viewBox="0 0 560 240" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px">
+        <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b6472"/></marker></defs>
+        <g font-size="12.5" fill="#1c2330" font-family="inherit">
+          <rect x="20" y="95" width="90" height="36" rx="8" fill="#eef3ff" stroke="#2456e6"/><text x="65" y="118" text-anchor="middle">待发</text>
+          <rect x="160" y="95" width="90" height="36" rx="8" fill="#e6f7f0" stroke="#0e9f6e"/><text x="205" y="118" text-anchor="middle">已发布</text>
+          <rect x="330" y="20" width="100" height="36" rx="8" fill="#046c4e"/><text x="380" y="43" text-anchor="middle" fill="#fff">已收录</text>
+          <rect x="330" y="95" width="100" height="36" rx="8" fill="#fdf3e0" stroke="#c2780a"/><text x="380" y="118" text-anchor="middle">未收录</text>
+          <rect x="330" y="170" width="100" height="36" rx="8" fill="#eef0f3" stroke="#8a93a3"/><text x="380" y="193" text-anchor="middle">未确认</text>
+          <rect x="20" y="180" width="90" height="36" rx="8" fill="#fdeceb" stroke="#d92d20"/><text x="65" y="203" text-anchor="middle">失败</text>
+          <line x1="110" y1="104" x2="158" y2="108" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)"/>
+          <text x="134" y="92" text-anchor="middle" fill="#5b6472" font-size="11">回填落地URL</text>
+          <line x1="250" y1="103" x2="328" y2="44" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)"/>
+          <line x1="250" y1="113" x2="328" y2="113" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)"/>
+          <line x1="250" y1="123" x2="328" y2="182" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)"/>
+          <text x="289" y="105" text-anchor="middle" fill="#5b6472" font-size="11">收录检测</text>
+          <line x1="430" y1="38" x2="430" y2="160" stroke="#8a93a3" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+          <line x1="380" y1="133" x2="380" y2="168" stroke="#8a93a3" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="510" y="150" text-anchor="middle" fill="#8a93a3" font-size="11">人工复核</text>
+          <line x1="20" y1="95" x2="20" y2="178" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)" transform="translate(45 0)"/>
+          <text x="72" y="158" text-anchor="middle" fill="#5b6472" font-size="11">发布失败</text>
+          <path d="M 65 180 C 40 150, 40 140, 58 133" fill="none" stroke="#5b6472" stroke-width="1.4" marker-end="url(#ar)"/>
+          <text x="30" y="147" text-anchor="middle" fill="#5b6472" font-size="11">重置</text>
+        </g>
+      </svg>
+    </div>
+    <div>
+      <h3 style="margin-top:6px">状态含义与允许操作</h3>
+      <table>
+        <tr><th>状态</th><th>含义</th><th>允许的操作</th></tr>
+        <tr><td><span class="badge b-pending">待发</span></td><td>已创建，尚未发布</td><td>编辑、删除、拉取填充</td></tr>
+        <tr><td><span class="badge b-published">已发布</span></td><td>已提交成功并回填落地 URL</td><td>修改落地 URL、发起收录检测</td></tr>
+        <tr><td><span class="badge b-failed">失败</span></td><td>发布失败（被拒/删帖/封号等）</td><td>重置为待发（可选换内容）、删除</td></tr>
+        <tr><td><span class="badge b-indexed">已收录</span></td><td>落地 URL 被搜索引擎收录</td><td>重新检测</td></tr>
+        <tr><td><span class="badge b-notindexed">未收录</span></td><td>检测确认未被收录</td><td>重新检测</td></tr>
+        <tr><td><span class="badge b-unknown">未确认</span></td><td>自动检测不可靠或失败</td><td>人工打开检测链接复核后手动标记</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- FR-06 -->
+  <h3>FR-06 收录检测</h3>
+  <p><strong>目的</strong>：回答「发出去的链接到底有没有被搜索引擎收录」。</p>
+  <p><strong>触发</strong>：用户在列表中勾选一条或多条「已发布」任务，点击「检测收录」。</p>
+  <p><strong>处理规则</strong>：</p>
+  <ul>
+    <li>自动检测：管理台逐条向 Bing 发起 <code>url:</code> / 站内查询，判定落地 URL 是否出现在结果中；<strong>逐条间隔 2–5 秒随机延时</strong>，避免高频请求。</li>
+    <li>结果三态：出现在结果中 → <span class="badge b-indexed">已收录</span>；确认无结果 → <span class="badge b-notindexed">未收录</span>；请求失败、结果页异常（验证码/反爬拦截）→ <span class="badge b-unknown">未确认</span>。</li>
+    <li>「未确认」任务每条附「打开检测页」按钮（生成 Google 站内查询链接），由人工在浏览器确认后手动标记为已收录/未收录。</li>
+    <li>同一任务两次检测间隔 ≥ 10 分钟，避免无意义重复请求；检测历史（时间+结果）保留最近 3 次供对比。</li>
+  </ul>
+  <p><strong>异常</strong>：批量检测进行中时按钮变为「检测中… (n/m)」，可随时中止；中止不产生状态变更。</p>
+  <div class="note"><strong>可靠性说明</strong> <span class="toc-jump">[Assumption, TBD]</span>：服务端自动检测依赖搜索引擎的反爬策略，可能经常落入「未确认」，人工复核兜底是正式流程的一部分，不是异常。</div>
+</section>
+
+<!-- ========== 5 共享规则 ========== -->
+<section id="shared">
+  <h2>5. 共享规则</h2>
+
+  <h3>5.1 半自动边界（canonical）</h3>
+  <ul>
+    <li>脚本只做：读规则、取任务、生成变体、填充字段、复制兜底、回写状态。<strong>不做</strong>：点击提交、处理验证码、模拟登录、绕过风控。</li>
+    <li>所有涉及对外发布的关键动作（提交）由用户在目标网站上亲手完成。</li>
+  </ul>
+
+  <h3>5.2 Spin 语法与变量（canonical）</h3>
+  <ul>
+    <li><code>{选项A|选项B|选项C}</code>：随机选择其一，支持嵌套一层（如 <code>{a|{b|c}}</code>），嵌套超过一层按文本处理并提示。</li>
+    <li>变量占位：<code>{锚文本}</code>、<code>{目标URL}</code>、<code>{日期}</code>（YYYY-MM-DD）。正文中的锚文本链接渲染为 <code>&lt;a href="目标URL"&gt;锚文本&lt;/a&gt;</code>。</li>
+    <li>括号不配对视为语法错误，阻止保存/取定。</li>
+  </ul>
+
+  <h3>5.3 状态机（canonical）</h3>
+  <p>唯一状态机见 FR-05 图与表；其他章节引用状态名时以此为准，不得出现平行定义。核心约束：「已发布」的前置条件是落地 URL 有效；「失败」不可直接跳到「已发布」，必须先重置为「待发」。</p>
+
+  <h3>5.4 数据与隐私边界</h3>
+  <ul>
+    <li>所有数据（任务、模板、规则、记录）仅存储在本机；脚本仅与本机管理台通信，不向任何远程服务器上传数据。</li>
+    <li>工具不托管、不加密存储第三方账号密码（本版不含账号管理模块）。</li>
+  </ul>
+</section>
+
+<!-- ========== 6 假设与待定 ========== -->
+<section id="open">
+  <h2>6. 假设与待定项</h2>
+  <table>
+    <tr><th>编号</th><th>内容</th><th>处理</th></tr>
+    <tr><td>A-1</td><td>单机单人使用，管理台跑在本机、浏览器访问，无登录鉴权 <span class="toc-jump">[Assumption]</span></td><td>如需多人/云部署请在评审时提出</td></tr>
+    <tr><td>A-2</td><td>首批内置平台以通用 Web2.0 / 书签站为主（Blogger、Medium、WordPress.com、Diigo 等），具体清单待定 <span class="toc-jump">[TBD]</span></td><td>规则引擎支持自定义，清单可后补</td></tr>
+    <tr><td>A-3</td><td>收录检测以 Bing 为自动通道、Google 链接为人工复核通道 <span class="toc-jump">[Assumption, TBD]</span></td><td>视实际可用性调整</td></tr>
+    <tr><td>A-4</td><td>富文本编辑器填充优先写 HTML，兼容性无法保证的平台退化为复制粘贴 <span class="toc-jump">[Assumption]</span></td><td>按平台逐个适配</td></tr>
+  </table>
+</section>
+
+<footer>fst · 外链发射台 PRD v0.1 · 本文档内所有演示均为交互示意，非最终视觉稿</footer>
+</div>
+
+<script>
+/* ===== Demo A：任务 ===== */
+let tasks=[
+  {a:"best trail running shoes",u:"https://example.com/best-trail-running-shoes",p:"Medium",s:"已发布"},
+  {a:" hiking gear checklist",u:"https://example.com/hiking-gear",p:"Diigo",s:"待发"}
+];
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function renderTasks(){
+  const tb=document.getElementById("taskRows");tb.innerHTML="";
+  tasks.forEach((t,i)=>{
+    const bcls={"待发":"b-pending","已发布":"b-published","失败":"b-failed","已收录":"b-indexed","未收录":"b-notindexed","未确认":"b-unknown"}[t.s];
+    tb.innerHTML+=`<tr><td>${esc(t.a)}</td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(t.u)}</td><td>${t.p||"-"}</td>
+      <td><span class="badge ${bcls}">${t.s}</span></td>
+      <td><button class="btn sm gray" onclick="delTask(${i})">删除</button></td></tr>`;
+  });
+  document.getElementById("taskEmpty").style.display=tasks.length?"none":"block";
+}
+function toggleForm(){const f=document.getElementById("taskForm");f.style.display=f.style.display==="none"?"block":"none";document.getElementById("formErr").style.display="none"}
+function addTask(){
+  const u=document.getElementById("inUrl").value.trim(),a=document.getElementById("inAnchor").value.trim();
+  if(!/^https?:\/\//.test(u)||!a||a.length>100){document.getElementById("formErr").style.display="block";return}
+  tasks.unshift({a:a,u:u,p:"",s:"待发"});
+  document.getElementById("inUrl").value="";document.getElementById("inAnchor").value="";
+  toggleForm();renderTasks();
+}
+function delTask(i){
+  if(tasks[i].s==="已发布"&&!confirm("该任务的发布记录将一并删除，确认？"))return;
+  if(tasks[i].s!=="已发布"&&!confirm("确认删除该任务？"))return;
+  tasks.splice(i,1);renderTasks();
+}
+renderTasks();
+/* ===== Demo A：Spin ===== */
+function spinNode(s){
+  let out="",i=0;
+  function parse(depth){
+    let res="";
+    while(i<s.length){
+      if(s[i]==="{"){i++;const opts=[""];let d=0;
+        while(i<s.length){if(s[i]==="{"&&d===0){i++;const v=parse(depth+1);opts[opts.length-1]+=v;continue}
+          if(s[i]==="}"){if(d===0){i++;break}else{d--}}
+          if(s[i]==="|"&&d===0){opts.push("");i++;continue}
+          if(s[i]==="|"){d++;opts[opts.length-1]+="|";i++;continue}
+          opts[opts.length-1]+=s[i];i++}
+        res+=opts[Math.floor(Math.random()*opts.length)];
+      }else{res+=s[i];i++}
+    }
+    return res;
+  }
+  out=parse(0);
+  return out.replace(/\{锚文本\}/g,"best trail running shoes").replace(/\{目标URL\}/g,"https://example.com/best-trail-running-shoes").replace(/\{日期\}/g,"2026-10-15");
+}
+function spinOnce(){document.getElementById("spinOut").textContent=spinNode(document.getElementById("spinSrc").value)}
+/* ===== Demo A tabs ===== */
+function swTab(n){
+  document.getElementById("tabA1").className="tab"+(n===1?" on":"");
+  document.getElementById("tabA2").className="tab"+(n===2?" on":"");
+  document.getElementById("paneA1").style.display=n===1?"block":"none";
+  document.getElementById("paneA2").style.display=n===2?"block":"none";
+}
+/* ===== Demo B ===== */
+let fsm={task:null,filled:false};
+function toggleUnmatch(){
+  const un=document.getElementById("unmatchSw").checked,pl=document.getElementById("fsmPlat");
+  if(un){pl.textContent="未匹配当前站点";pl.className="badge b-unknown";document.getElementById("fsmStatus").textContent="当前站点无匹配规则，面板将在 3 秒后缩起";}
+  else{pl.textContent="已匹配：Generic Blog";pl.className="badge b-pending";document.getElementById("fsmStatus").textContent="脚本已激活，等待操作";}
+}
+function fsmPull(){
+  if(document.getElementById("unmatchSw").checked)return;
+  fsm.task={a:"best trail running shoes",v:spinNode(document.getElementById("spinSrc").value)};
+  fsm.filled=false;
+  document.getElementById("fsmEmpty").style.display="none";
+  document.getElementById("fsmInfo").style.display="block";
+  document.getElementById("fsmAnchor").textContent=fsm.task.a;
+  document.getElementById("fsmPrev").textContent="变体预览："+fsm.task.v.slice(0,60)+"…";
+  document.getElementById("fsmStatus").textContent="已取定任务并固定变体（之后填充始终用这份内容）";
+}
+function fsmFill(){
+  if(!fsm.task){document.getElementById("fsmStatus").textContent="请先拉取任务";return}
+  fillField("fTitle",fsm.task.v.split(":")[0]+": "+fsm.task.a);
+  fillField("fBody",fsm.task.v);
+  fillField("fLink","https://example.com/best-trail-running-shoes");
+  fsm.filled=true;
+  document.getElementById("fsmStatus").textContent="已填充，请人工检查内容、过验证码后自行点击提交";
+}
+function fillField(id,val){const el=document.getElementById(id);el.textContent=val;el.classList.add("filled")}
+function fsmDone(){
+  if(!fsm.filled){document.getElementById("fsmStatus").textContent="请先一键填充并完成人工提交";return}
+  const url=prompt("粘贴发布后的落地 URL（帖子链接）：","https://example-blog.com/my-post-123");
+  if(!url||!/^https?:\/\//.test(url))return;
+  document.getElementById("fsmStatus").textContent="已回填落地 URL，任务状态 → 已发布 ✓（可回管理台查看）";
+}
+</script>
+</body>
+</html>

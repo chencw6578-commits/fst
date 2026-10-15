@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fst · 外链发射台</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1c2330; --ink2:#5b6472; --line:#e4e7ec;
+    --accent:#2456e6; --accent-bg:#eef3ff; --ok:#0e9f6e; --ok-bg:#e6f7f0;
+    --warn:#c2780a; --warn-bg:#fdf3e0; --bad:#d92d20; --bad-bg:#fdeceb; --mute:#8a93a3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:14.5px;line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 60px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+  h1{font-size:21px;margin:0}
+  h1 small{font-size:12px;color:var(--mute);font-weight:normal;margin-left:8px}
+  #srvDot{font-size:12.5px;padding:3px 12px;border-radius:999px;background:var(--ok-bg);color:var(--ok)}
+  #srvDot.off{background:var(--bad-bg);color:var(--bad)}
+  nav{display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid var(--line)}
+  nav .tab{padding:8px 20px;cursor:pointer;border:none;background:none;font-size:14.5px;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit}
+  nav .tab.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  section{display:none}
+  section.on{display:block}
+  .toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;padding:7px 16px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .btn:hover{opacity:.92}
+  .btn.ghost{background:#fff;color:var(--accent)}
+  .btn.gray{border-color:var(--line);background:#fff;color:var(--ink)}
+  .btn.danger{border-color:var(--bad);background:#fff;color:var(--bad)}
+  .btn.sm{padding:2px 10px;font-size:12px;border-radius:6px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px;font-family:inherit;background:#fff}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-bg);border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px}
+  th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:var(--bg);font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafbfd}
+  .badge{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;white-space:nowrap}
+  .b-待发{background:var(--accent-bg);color:var(--accent)}
+  .b-已发布{background:var(--ok-bg);color:var(--ok)}
+  .b-失败{background:var(--bad-bg);color:var(--bad)}
+  .b-已收录{background:#046c4e;color:#fff}
+  .b-未收录{background:var(--warn-bg);color:var(--warn)}
+  .b-未确认{background:#eef0f3;color:var(--ink2)}
+  .url{max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+  a{color:var(--accent)}
+  .empty{color:var(--mute);text-align:center;padding:36px 0}
+  .ops{display:flex;gap:4px;flex-wrap:wrap}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:12px}
+  .card h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+  .card pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;white-space:pre-wrap;word-break:break-word;margin:8px 0 0;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .muted{color:var(--mute);font-size:12.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  label{font-size:13px;color:var(--ink2);display:block;margin:10px 0 4px}
+  label .req{color:var(--bad)}
+  /* modal */
+  #overlay{position:fixed;inset:0;background:rgba(28,35,48,.4);display:none;align-items:flex-start;justify-content:center;z-index:1000;padding:60px 16px}
+  #overlay.on{display:flex}
+  #modal{background:#fff;border-radius:12px;padding:22px 24px;width:560px;max-width:100%;max-height:80vh;overflow:auto}
+  #modal h3{margin:0 0 4px}
+  #modalErr{color:var(--bad);font-size:13px;margin-top:8px;display:none}
+  #modalActs{margin-top:16px;display:flex;gap:8px;justify-content:flex-end}
+  #toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:2000;display:none;
+    background:#2d3748;color:#fff;border-radius:8px;padding:9px 20px;font-size:13.5px;max-width:80vw}
+  #toast.err{background:var(--bad)}
+  .landingCell{cursor:pointer}
+  .landingCell input{width:180px;font-size:12.5px;padding:3px 8px}
+  .code{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;word-break:break-all}
+  .steps li{margin:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>fst · 外链发射台<small>本地半自动化外链发布</small></h1>
+    <span id="srvDot">● 已连接</span>
+  </header>
+  <nav>
+    <button class="tab on" data-tab="tasks">外链任务</button>
+    <button class="tab" data-tab="tpls">文案模板</button>
+    <button class="tab" data-tab="rules">平台规则</button>
+    <button class="tab" data-tab="help">使用说明</button>
+  </nav>
+
+  <!-- ========= 任务 ========= -->
+  <section id="tab-tasks" class="on">
+    <div class="toolbar">
+      <select id="fStatus" style="width:120px">
+        <option value="">全部状态</option>
+        <option>待发</option><option>已发布</option><option>失败</option>
+        <option>已收录</option><option>未收录</option><option>未确认</option>
+      </select>
+      <input id="fKw" placeholder="搜索锚文本 / URL…" style="flex:1;min-width:160px">
+      <button class="btn" id="btnCheck" onclick="batchCheck()">检测收录</button>
+      <button class="btn ghost" onclick="openTaskModal()">＋ 新建任务</button>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:30px"><input type="checkbox" id="selAll" onchange="toggleAll(this)"></th>
+        <th>锚文本</th><th>目标 URL</th><th>平台</th><th>状态</th><th>落地 URL（点击编辑）</th><th style="width:230px">操作</th>
+      </tr></thead>
+      <tbody id="taskRows"></tbody>
+    </table>
+    <div class="empty" id="taskEmpty">还没有任务，点击右上角「＋ 新建任务」创建第一条外链任务</div>
+  </section>
+
+  <!-- ========= 模板 ========= -->
+  <section id="tab-tpls">
+    <div class="toolbar"><span class="muted">模板支持 Spin 语法 <span class="code">{选项1|选项2}</span> 与变量 <span class="code">{锚文本}</span> <span class="code">{目标URL}</span> <span class="code">{日期}</span>，可嵌套一层</span>
+      <button class="btn" style="margin-left:auto" onclick="openTplModal()">＋ 新建模板</button></div>
+    <div id="tplList"></div>
+  </section>
+
+  <!-- ========= 规则 ========= -->
+  <section id="tab-rules">
+    <div class="toolbar"><span class="muted">规则告诉油猴脚本「当前网站上标题/正文/链接该填进哪个输入框」。域名支持通配符，如 <span class="code">*.wordpress.com</span></span>
+      <button class="btn" style="margin-left:auto" onclick="openRuleModal()">＋ 新建规则</button></div>
+    <div id="ruleList"></div>
+  </section>
+
+  <!-- ========= 说明 ========= -->
+  <section id="tab-help">
+    <div class="card">
+      <h3>使用流程</h3>
+      <ol class="steps">
+        <li><b>安装油猴脚本</b>：浏览器先安装 <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> 扩展，然后打开 <a id="scriptLink" href="/fst-helper.user.js" class="code">http://127.0.0.1:3456/fst-helper.user.js</a>，Tampermonkey 会自动弹出安装页。</li>
+        <li><b>创建任务</b>：在「外链任务」页新建任务（目标 URL + 锚文本 + 模板），或在「平台规则」页配置目标站点的填充规则。</li>
+        <li><b>开始发布</b>：登录目标平台进入发帖页 → 页面右下角出现「fst 助手」面板 → 拉取任务 → 一键填充 → <b>人工检查内容、过验证码、自己点击提交</b>（脚本永不代替你提交）。</li>
+        <li><b>回填记录</b>：发布成功后点面板上的「标记已发布」，粘贴落地 URL，管理台状态自动更新。</li>
+        <li><b>收录检测</b>：回到管理台勾选已发布任务，点「检测收录」。自动检测不可靠时会得到「未确认」，点「打开检测页」人工确认。</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>注意事项</h3>
+      <ul>
+        <li>脚本激活条件：当前网站域名命中「平台规则」且规则未停用；「通用启发式（兜底）」规则会对所有站点生效，可按需停用。</li>
+        <li>填充不准确时，用面板上的「拾取选择器」功能点选目标输入框，把得到的选择器填进对应平台规则里。</li>
+        <li>所有数据仅保存在本机 <span class="code" id="dbPath">data/db.json</span>，脚本只与本机管理台通信。</li>
+        <li>自动收录检测依赖 Bing 的可用性，触发反爬时会得到「未确认」，人工复核是正式流程的一部分。</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<div id="overlay"><div id="modal"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 基础 ================= */
+let db = { tasks: [], templates: [], rules: [] };
+let tabEls = document.querySelectorAll('nav .tab');
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtTime = ts => ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false }) : '—';
+const nowLocal = () => { const d = new Date(), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; };
+
+function toast(msg, isErr) {
+  const t = $('toast'); t.textContent = msg; t.className = isErr ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 3200);
+}
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+async function loadState() {
+  try { db = await api('/api/state'); $('srvDot').textContent = '● 已连接'; $('srvDot').className = ''; }
+  catch (e) { $('srvDot').textContent = '● 服务未连接'; $('srvDot').className = 'off'; throw e; }
+}
+function rerenderAll() { renderTasks(); renderTpls(); renderRules(); }
+
+tabEls.forEach(b => b.onclick = () => {
+  tabEls.forEach(x => x.classList.remove('on')); b.classList.add('on');
+  document.querySelectorAll('section').forEach(s => s.classList.remove('on'));
+  $('tab-' + b.dataset.tab).classList.add('on');
+});
+$('scriptLink').textContent = location.origin + '/fst-helper.user.js';
+$('scriptLink').href = '/fst-helper.user.js';
+
+/* ================= 模态框 ================= */
+function showModal(html) { $('modal').innerHTML = html; $('overlay').classList.add('on'); }
+function closeModal() { $('overlay').classList.remove('on'); }
+$('overlay').addEventListener('mousedown', e => { if (e.target === $('overlay')) closeModal(); });
+
+/* ================= 任务 ================= */
+const PUBLISHED_SET = ['已发布', '已收录', '未收录', '未确认'];
+function tplName(id) { const t = db.templates.find(x => x.id === id); return t ? t.name : '通用模板'; }
+
+function visibleTasks() {
+  const st = $('fStatus').value, kw = $('fKw').value.trim().toLowerCase();
+  return db.tasks.filter(t =>
+    (!st || t.status === st) &&
+    (!kw || [t.anchor, t.targetUrl, t.landingUrl, t.platform].join(' ').toLowerCase().includes(kw)));
+}
+function renderTasks() {
+  const list = visibleTasks(), tb = $('taskRows');
+  tb.innerHTML = list.map(t => taskRow(t)).join('');
+  $('taskEmpty').style.display = db.tasks.length ? 'none' : 'block';
+  if (db.tasks.length && !list.length) $('taskEmpty').style.display = 'block',
+    $('taskEmpty').textContent = '没有符合筛选条件的任务';
+  else if (!db.tasks.length) $('taskEmpty').textContent = '还没有任务，点击右上角「＋ 新建任务」创建第一条外链任务';
+  updateCheckBtn();
+}
+function taskRow(t) {
+  const hist = (t.checkHistory || []).map(h => `${fmtTime(h.at)} → ${h.result}${h.detail ? '（' + h.detail + '）' : ''}`).join('\n');
+  const ops = [];
+  if (t.status === '待发') ops.push(`<button class="btn sm gray" onclick="openTaskModal('${t.id}')">编辑</button>`,
+    `<button class="btn sm gray" onclick="markFailed('${t.id}')">标记失败</button>`);
+  if (PUBLISHED_SET.includes(t.status)) ops.push(
+    `<button class="btn sm" onclick="checkOne('${t.id}')">检测收录</button>`,
+    `<button class="btn sm gray" onclick="openCheckPage('${t.id}')">打开检测页</button>`,
+    `<button class="btn sm gray" onclick="markFailed('${t.id}')">标记失败</button>`);
+  if (t.status === '失败') ops.push(`<button class="btn sm" onclick="resetTask('${t.id}')">重置为待发</button>`);
+  ops.push(`<button class="btn sm danger" onclick="delTask('${t.id}', ${t.status === '已发布' || PUBLISHED_SET.includes(t.status) ? 'true' : 'false'})">删除</button>`);
+  return `<tr>
+    <td><input type="checkbox" class="rowSel" data-id="${t.id}" ${PUBLISHED_SET.includes(t.status) ? '' : 'disabled'} onchange="updateCheckBtn()"></td>
+    <td><b>${esc(t.anchor)}</b><div class="muted">${tplName(t.templateId)}${t.variant ? ' · 已取定变体' : ''}</div></td>
+    <td><a class="url" href="${esc(t.targetUrl)}" target="_blank" title="${esc(t.targetUrl)}">${esc(t.targetUrl)}</a></td>
+    <td>${esc(t.platform) || '<span class="muted">—</span>'}</td>
+    <td><span class="badge b-${t.status}" title="${esc(hist)}">${t.status}</span>${hist ? `<div class="muted" style="font-size:11px">检测 ${t.checkHistory.length} 次</div>` : ''}</td>
+    <td><span class="landingCell url" title="点击编辑落地 URL" onclick="editLanding(event,'${t.id}')">${t.landingUrl ? esc(t.landingUrl) : '<span class="muted">点击填写</span>'}</span><div class="muted" style="font-size:11px">发布：${fmtTime(t.publishedAt)}</div></td>
+    <td><div class="ops">${ops.join('')}</div></td>
+  </tr>`;
+}
+function toggleAll(cb) { document.querySelectorAll('.rowSel:not(:disabled)').forEach(c => c.checked = cb.checked); updateCheckBtn(); }
+function selectedIds() { return [...document.querySelectorAll('.rowSel:checked')].map(c => c.dataset.id); }
+function updateCheckBtn() {
+  const n = selectedIds().length, btn = $('btnCheck');
+  btn.disabled = !n || btn._busy; btn.textContent = btn._busy ? `检测中… (${btn._done}/${btn._total})` : (n ? `检测收录（已选 ${n}）` : '检测收录');
+}
+$('fStatus').onchange = renderTasks; $('fKw').oninput = renderTasks;
+
+function openTaskModal(id) {
+  const t = id ? db.tasks.find(x => x.id === id) : null;
+  showModal(`<h3>${t ? '编辑任务' : '新建任务'}</h3>
+    <label>目标 URL <span class="req">*</span></label>
+    <input id="mUrl" style="width:100%" value="${esc(t && t.targetUrl)}" placeholder="https://example.com/landing-page">
+    <label>锚文本 <span class="req">*</span>（≤100 字符，对应模板变量 {锚文本}）</label>
+    <input id="mAnchor" style="width:100%" value="${esc(t && t.anchor)}" placeholder="例如：best running shoes">
+    <div class="grid2">
+      <div><label>关联模板</label><select id="mTpl" style="width:100%">${db.templates.map(x =>
+        `<option value="${x.id}" ${t && t.templateId === x.id ? 'selected' : (!t && x.isDefault ? 'selected' : '')}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div><label>平台（可留空，发布时自动识别）</label><input id="mPlat" style="width:100%" value="${esc(t && t.platform)}" placeholder="如 Medium / Diigo"></div>
+    </div>
+    <div id="modalErr"></div>
+    <div id="modalActs"><button class="btn gray" onclick="closeModal()">取消</button><button class="btn" onclick="saveTask('${id || ''}')">保存</button></div>`);
+}
+async function saveTask(id) {
+  const body = { targetUrl: $('mUrl').value, anchor: $('mAnchor').value, templateId: $('mTpl').value === 'tpl_default' ? null : $('mTpl').value, platform: $('mPlat').value };
+  try {
+    if (id) await api('/api/tasks/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    else await api('/api/tasks', { method: 'POST', body: JSON.stringify(body) });
+    closeModal(); await loadState(); rerenderAll(); toast(id ? '任务已更新' : '任务已创建');
+  } catch (e) { const el = $('modalErr'); el.textContent = e.message; el.style.display = 'block'; }
+}
+async function delTask(id, warn) {
+  if (!confirm(warn ? '该任务的发布记录将一并删除，确认？' : '确认删除该任务？')) return;
+  try { await api('/api/tasks/' + id, { method: 'DELETE' }); await loadState(); rerenderAll(); toast('已删除'); }
+  catch (e) { toast(e.message, true); }
+}
+async function markFailed(id) {
+  try { await api(`/api/tasks/${id}/status`, { method: 'POST', body: JSON.stringify({ action: 'fail' }) }); await loadState(); rerenderAll(); toast('已标记失败'); }
+  catch (e) { toast(e.message, true); }
+}
+async function resetTask(id) {
+  const reg = confirm('重置为待发。\n\n点「确定」= 重置并生成新变体内容\n点「取消」= 仅重置，沿用原内容');
+  try { await api(`/api/tasks/${id}/status`, { method: 'POST', body: JSON.stringify({ action: 'reset', regenerate: reg }) }); await loadState(); rerenderAll(); toast(reg ? '已重置，下次拉取时生成新变体' : '已重置'); }
+  catch (e) { toast(e.message, true); }
+}
+function editLanding(e, id) {
+  if (e.target.tagName === 'INPUT') return;
+  const t = db.tasks.find(x => x.id === id), span = e.currentTarget;
+  span.innerHTML = `<input value="${esc(t.landingUrl)}" placeholder="https://…">`;
+  const inp = span.querySelector('input'); inp.focus();
+  const save = async () => {
+    const v = inp.value.trim();
+    if (v && !/^https?:\/\//.test(v)) { toast('落地 URL 需以 http(s):// 开头', true); span.innerHTML = t.landingUrl ? esc(t.landingUrl) : '<span class="muted">点击填写</span>'; return; }
+    if (v === t.landingUrl) { span.innerHTML = t.landingUrl ? esc(t.landingUrl) : '<span class="muted">点击填写</span>'; return; }
+    try {
+      if (v && !PUBLISHED_SET.includes(t.status)) await api(`/api/tasks/${id}/status`, { method: 'POST', body: JSON.stringify({ action: 'publish', landingUrl: v }) });
+      else await api('/api/tasks/' + id, { method: 'PUT', body: JSON.stringify({ landingUrl: v }) });
+      await loadState(); rerenderAll(); toast('落地 URL 已保存');
+    } catch (err) { toast(err.message, true); span.innerHTML = t.landingUrl ? esc(t.landingUrl) : '<span class="muted">点击填写</span>'; }
+  };
+  inp.onblur = save; inp.onkeydown = ev => { if (ev.key === 'Enter') inp.blur(); if (ev.key === 'Escape') span.innerHTML = t.landingUrl ? esc(t.landingUrl) : '<span class="muted">点击填写</span>'; };
+}
+function openCheckPage(id) {
+  const t = db.tasks.find(x => x.id === id);
+  window.open('https://www.google.com/search?q=' + encodeURIComponent('"' + t.landingUrl + '"'), '_blank');
+}
+async function checkOne(id) {
+  try { await api(`/api/tasks/${id}/check`, { method: 'POST', body: '{}' }); await loadState(); rerenderAll(); }
+  catch (e) { toast(e.message, true); }
+}
+async function batchCheck() {
+  const btn = $('btnCheck'), ids = selectedIds();
+  if (!ids.length || btn._busy) return;
+  btn._busy = true; btn._done = 0; btn._total = ids.length; btn._abort = false;
+  const oldText = btn.dataset.label;
+  btn.onclick = () => { btn._abort = true; };
+  updateCheckBtn();
+  for (const id of ids) {
+    if (btn._abort) { toast('已中止检测'); break; }
+    await checkOne(id);
+    btn._done++; updateCheckBtn();
+    if (btn._done < btn._total) await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
+  }
+  btn._busy = false; btn.onclick = batchCheck; updateCheckBtn();
+}
+
+/* ================= 模板 ================= */
+function renderTpls() {
+  $('tplList').innerHTML = db.templates.map(t => `
+    <div class="card">
+      <h3>${esc(t.name)} ${t.isDefault ? '<span class="badge b-待发">默认</span>' : ''}
+        <span><button class="btn sm ghost" onclick="previewTpl('${t.id}')">预览变体</button>
+        <button class="btn sm gray" onclick="openTplModal('${t.id}')">编辑</button>
+        ${t.isDefault ? '' : `<button class="btn sm danger" onclick="delTpl('${t.id}')">删除</button>`}</span></h3>
+      <div class="grid2">
+        <div><div class="muted">标题模板</div><pre>${esc(t.titleTpl)}</pre></div>
+        <div><div class="muted">正文模板</div><pre>${esc(t.bodyTpl)}</pre></div>
+      </div>
+      <div id="pv_${t.id}"></div>
+    </div>`).join('') || '<div class="empty">暂无模板</div>';
+}
+async function previewTpl(id) {
+  const t = db.templates.find(x => x.id === id);
+  const sample = db.tasks.find(x => x.status === '待发') || { anchor: 'best running shoes', targetUrl: 'https://example.com/running-shoes' };
+  try {
+    const r = await api('/api/spin-preview', { method: 'POST', body: JSON.stringify({ titleTpl: t.titleTpl, bodyTpl: t.bodyTpl, anchor: sample.anchor, targetUrl: sample.targetUrl }) });
+    $('pv_' + id).innerHTML = `<div class="muted" style="margin-top:10px">变体预览（锚文本示例：${esc(sample.anchor)}）</div>
+      <pre><b>${esc(r.title)}</b>\n\n${esc(r.bodyText)}</pre>`;
+  } catch (e) { toast(e.message, true); }
+}
+function openTplModal(id) {
+  const t = id ? db.templates.find(x => x.id === id) : { name: '', titleTpl: '', bodyTpl: '' };
+  showModal(`<h3>${id ? '编辑模板' : '新建模板'}</h3>
+    <label>名称 <span class="req">*</span></label><input id="mName" style="width:100%" value="${esc(t.name)}">
+    <label>标题模板（Spin 语法）</label><textarea id="mTitle" style="width:100%" rows="2">${esc(t.titleTpl)}</textarea>
+    <label>正文模板（空行分段；{锚文本} 出现处会渲染为超链接）</label><textarea id="mBody" style="width:100%" rows="5">${esc(t.bodyTpl)}</textarea>
+    <div id="modalErr"></div>
+    <div id="modalActs"><button class="btn gray" onclick="closeModal()">取消</button><button class="btn" onclick="saveTpl('${id || ''}')">保存</button></div>`);
+}
+async function saveTpl(id) {
+  const body = { name: $('mName').value, titleTpl: $('mTitle').value, bodyTpl: $('mBody').value };
+  try {
+    if (id) await api('/api/templates/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    else await api('/api/templates', { method: 'POST', body: JSON.stringify(body) });
+    closeModal(); await loadState(); renderTpls(); toast('模板已保存');
+  } catch (e) { const el = $('modalErr'); el.textContent = e.message; el.style.display = 'block'; }
+}
+async function delTpl(id) {
+  if (!confirm('确认删除该模板？')) return;
+  try { await api('/api/templates/' + id); await loadState(); renderTpls(); toast('已删除'); }
+  catch (e) {
+    if (confirm(e.message + '\n\n仍要删除吗？')) {
+      try { await api('/api/templates/' + id + '?force=1', { method: 'DELETE' }); await loadState(); renderTpls(); toast('已删除'); } catch (e2) { toast(e2.message, true); }
+    }
+  }
+}
+
+/* ================= 规则 ================= */
+function renderRules() {
+  $('ruleList').innerHTML = db.rules.map(r => `
+    <div class="card">
+      <h3>${esc(r.name)} <span>
+        <label style="display:inline;margin:0 8px 0 0;font-size:12.5px"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleRule('${r.id}',this.checked)"> 启用</label>
+        <button class="btn sm gray" onclick="openRuleModal('${r.id}')">编辑</button>
+        ${r.id === 'rule_heuristic' ? '' : `<button class="btn sm danger" onclick="delRule('${r.id}')">删除</button>`}</span></h3>
+      <div class="muted">域名 <span class="code">${esc(r.pattern)}</span>${r.pathIncludes ? ` · 路径包含 <span class="code">${esc(r.pathIncludes)}</span>` : ''} · 模式：${r.mode === 'heuristic' ? '启发式猜测' : '选择器'}</div>
+      ${r.mode !== 'heuristic' ? `<div class="grid2" style="margin-top:6px">
+        <div class="muted">标题：<span class="code">${esc(r.sel.title) || '—'}</span></div>
+        <div class="muted">正文：<span class="code">${esc(r.sel.body) || '—'}</span></div>
+        <div class="muted">链接：<span class="code">${esc(r.sel.link) || '—'}</span></div>
+        <div class="muted">标签：<span class="code">${esc(r.sel.tags) || '—'}</span></div></div>` : ''}
+    </div>`).join('');
+}
+function openRuleModal(id) {
+  const r = id ? db.rules.find(x => x.id === id) : { name: '', pattern: '', pathIncludes: '', mode: 'selector', sel: { title: '', body: '', link: '', tags: '' }, enabled: true };
+  showModal(`<h3>${id ? '编辑规则' : '新建规则'}</h3>
+    <div class="grid2">
+      <div><label>规则名称 <span class="req">*</span></label><input id="rName" style="width:100%" value="${esc(r.name)}"></div>
+      <div><label>域名匹配（支持 * 通配）<span class="req">*</span></label><input id="rPat" style="width:100%" value="${esc(r.pattern)}" placeholder="*.wordpress.com 或 www.example.com"></div>
+    </div>
+    <div class="grid2">
+      <div><label>路径包含（可选，如 post-new.php）</label><input id="rPath" style="width:100%" value="${esc(r.pathIncludes)}"></div>
+      <div><label>填充模式</label><select id="rMode" style="width:100%"><option value="selector" ${r.mode === 'selector' ? 'selected' : ''}>选择器（精确）</option><option value="heuristic" ${r.mode === 'heuristic' ? 'selected' : ''}>启发式（自动猜测）</option></select></div>
+    </div>
+    <label>标题选择器</label><input id="rSelT" style="width:100%" value="${esc(r.sel.title)}" placeholder="input[name=&quot;post_title&quot;]">
+    <label>正文选择器（支持 textarea 与 contenteditable 富文本框）</label><input id="rSelB" style="width:100%" value="${esc(r.sel.body)}">
+    <label>链接 URL 选择器（可选）</label><input id="rSelL" style="width:100%" value="${esc(r.sel.link)}">
+    <label>标签选择器（可选）</label><input id="rSelG" style="width:100%" value="${esc(r.sel.tags)}">
+    <div id="modalErr"></div>
+    <div id="modalActs"><button class="btn gray" onclick="closeModal()">取消</button><button class="btn" onclick="saveRule('${id || ''}')">保存</button></div>`);
+}
+async function saveRule(id) {
+  const body = {
+    name: $('rName').value, pattern: $('rPat').value, pathIncludes: $('rPath').value, mode: $('rMode').value,
+    sel: { title: $('rSelT').value, body: $('rSelB').value, link: $('rSelL').value, tags: $('rSelG').value }
+  };
+  try {
+    if (id) await api('/api/rules/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    else await api('/api/rules', { method: 'POST', body: JSON.stringify(body) });
+    closeModal(); await loadState(); renderRules(); toast('规则已保存');
+  } catch (e) { const el = $('modalErr'); el.textContent = e.message; el.style.display = 'block'; }
+}
+async function toggleRule(id, enabled) {
+  try { await api('/api/rules/' + id, { method: 'PUT', body: JSON.stringify({ enabled }) }); await loadState(); toast(enabled ? '规则已启用' : '规则已停用'); }
+  catch (e) { toast(e.message, true); await loadState(); renderRules(); }
+}
+async function delRule(id) {
+  if (!confirm('确认删除该规则？')) return;
+  try { await api('/api/rules/' + id, { method: 'DELETE' }); await loadState(); renderRules(); toast('已删除'); }
+  catch (e) { toast(e.message, true); }
+}
+
+/* ================= 启动 ================= */
+loadState().then(rerenderAll).catch(() => { rerenderAll(); });
+</script>
+</body>
+</html>
