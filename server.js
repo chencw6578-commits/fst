@@ -61,6 +61,41 @@ function defaultDb() {
           id: 'rule_diigo', name: 'Diigo 书签（示例，可用拾取器校正）', pattern: 'www.diigo.com', pathIncludes: '',
           mode: 'selector', enabled: true, updatedAt: t + 3,
           sel: { title: 'input[name="title"]', body: 'textarea[name="desc"]', link: 'input[name="url"]', tags: 'input[name="tags"]' }
+        },
+        {
+          id: 'rule_medium', name: 'Medium 文章编辑器（示例，可用拾取器校正）', pattern: 'medium.com', pathIncludes: 'edit',
+          mode: 'selector', enabled: true, updatedAt: t + 4,
+          sel: { title: 'textarea[aria-label="Title"], textarea[placeholder="Title"]', body: 'div[role="textbox"][contenteditable="true"]', link: '', tags: '' }
+        },
+        {
+          id: 'rule_reddit', name: 'Reddit 发帖（old/new 版，示例）', pattern: '*.reddit.com', pathIncludes: 'submit',
+          mode: 'selector', enabled: true, updatedAt: t + 5,
+          sel: { title: 'input[name="title"], textarea[name="title"], input[placeholder*="Title"]', body: 'textarea[name="text"], div[role="textbox"][contenteditable="true"]', link: '', tags: '' }
+        },
+        {
+          id: 'rule_pinterest', name: 'Pinterest 建图页（示例，可用拾取器校正）', pattern: '*.pinterest.com', pathIncludes: 'builder',
+          mode: 'selector', enabled: true, updatedAt: t + 6,
+          sel: { title: 'input[aria-label*="Title" i], input[name="title"]', body: 'textarea[aria-label*="Description" i], textarea[name="description"]', link: 'input[type="url"], input[name="website_url"]', tags: '' }
+        },
+        {
+          id: 'rule_wpcom', name: 'WordPress.com 区块编辑器（标题自动填，正文请用复制粘贴）', pattern: '*.wordpress.com', pathIncludes: '',
+          mode: 'selector', enabled: true, updatedAt: t + 7,
+          sel: { title: 'textarea.post-title__input, textarea[placeholder*="Title"], textarea[placeholder*="标题"]', body: '', link: '', tags: '' }
+        },
+        {
+          id: 'rule_tumblr', name: 'Tumblr 文字帖（示例，可用拾取器校正）', pattern: '*.tumblr.com', pathIncludes: 'new',
+          mode: 'selector', enabled: true, updatedAt: t + 8,
+          sel: { title: 'input[name="title"], input[placeholder*="Title"]', body: 'div[role="textbox"][contenteditable="true"], div[contenteditable="true"].editor-plaintext', link: '', tags: '' }
+        },
+        {
+          id: 'rule_livejournal', name: 'LiveJournal 写日志（示例，可用拾取器校正）', pattern: '*.livejournal.com', pathIncludes: 'update',
+          mode: 'selector', enabled: true, updatedAt: t + 9,
+          sel: { title: 'input[name="subject"], #subject', body: 'textarea[name="event"], textarea#draft, div[role="textbox"][contenteditable="true"]', link: '', tags: '' }
+        },
+        {
+          id: 'rule_telegraph', name: 'Telegra.ph 快速发文', pattern: 'telegra.ph', pathIncludes: '',
+          mode: 'selector', enabled: true, updatedAt: t + 10,
+          sel: { title: 'input[placeholder="Title"], input[placeholder="标题"], input[name="title"]', body: 'div[contenteditable="true"]', link: '', tags: '' }
         }
       ];
     })(),

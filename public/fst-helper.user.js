@@ -199,9 +199,11 @@
       return r.width > 30 && r.height > 10 && !el.disabled && el.offsetParent !== null;
     }
     function fillHeuristic(v, report) {
-      // 标题：优先 name/id/placeholder/aria 含 title 的文本框，其次第一个可见大文本框
+      // 标题：优先 name/id/placeholder/aria 含 title 的文本框或文本域（兼容 Medium 等用 textarea 做标题的编辑器），
+      // 其次第一个可见大文本框
       const inputs = [...document.querySelectorAll('input[type="text"], input:not([type])')].filter(visible);
-      const titleEl = inputs.find(el => /title|标题/i.test([el.name, el.id, el.placeholder, el.getAttribute('aria-label')].join(' ')))
+      const titleCands = inputs.concat([...document.querySelectorAll('textarea')].filter(visible));
+      const titleEl = titleCands.find(el => /title|标题/i.test([el.name, el.id, el.placeholder, el.getAttribute('aria-label')].join(' ')))
         || inputs.filter(el => el.getBoundingClientRect().width > 250).sort((a, b) => a.tabIndex - b.tabIndex)[0];
       report.title = fillField(titleEl, v.title);
       if (!report.title) report.missing.push('标题（未找到合适输入框）');
